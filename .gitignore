@@ -1,1 +1,12 @@
 .aider*
+# Ignore log files
+*.log
+
+# Ignore zip files (support packets)
+*.zip
+
+# Ignore binary
+mlp
+
+# Temporary files
+tmp/
