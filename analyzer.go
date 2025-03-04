@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"time"
@@ -31,14 +32,6 @@ type CountedItem struct {
 	Item  string
 	Count int
 }
-
-import (
-	"fmt"
-	"io"
-	"sort"
-	"strings"
-	"time"
-)
 
 // analyzeAndDisplayStats analyzes log entries and displays statistics
 func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
