@@ -52,7 +52,7 @@ type ClaudeError struct {
 }
 
 // analyzeWithClaude sends log data to Claude API for analysis
-func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int) {
+func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemStatement string) {
 	fmt.Println("Analyzing logs with Claude Sonnet API...")
 	
 	// If maxEntries is not set (0), use the default
@@ -106,8 +106,14 @@ Analyze the provided logs and provide a comprehensive report including:
 Focus on actionable insights and be specific about what you find.`
 
 	// Create the user prompt
-	userPrompt := fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
-		len(logsToAnalyze), logText.String())
+	userPrompt := ""
+	if problemStatement != "" {
+		userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.", 
+			problemStatement, len(logsToAnalyze), logText.String())
+	} else {
+		userPrompt = fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
+			len(logsToAnalyze), logText.String())
+	}
 	
 	// Create the request
 	request := ClaudeRequest{

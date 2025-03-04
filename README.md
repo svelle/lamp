@@ -57,6 +57,7 @@ mlp --support-packet <path> [options]
 - `--ai-analyze`: Analyze logs using Claude AI
 - `--api-key <key>`: Claude API key for AI analysis (or set CLAUDE_API_KEY environment variable)
 - `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
+- `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
 - `--help`: Show help information
 
 ### Examples
@@ -117,6 +118,9 @@ mlp --file mattermost.log --ai-analyze
 
 # Specify maximum number of log entries to analyze
 mlp --file mattermost.log --ai-analyze --max-entries 200
+
+# Provide a problem statement to guide the analysis
+mlp --file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
 ```
 
 Analyze support packet logs using Claude AI:
@@ -198,6 +202,8 @@ You can provide the API key in two ways:
 2. Setting the `CLAUDE_API_KEY` environment variable (more secure)
 
 Note: When using AI analysis, a limited number of log entries are sent to the Claude API to stay within token limits. By default, the tool sends up to 100 entries, but you can adjust this with the `--max-entries` flag.
+
+You can also provide a problem statement with the `--problem` flag to help guide the AI analysis toward specific issues you're investigating.
 
 ## License
 
