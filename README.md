@@ -54,6 +54,8 @@ mlp --support-packet <path> [options]
 - `--user <username>`: Filter logs by username
 - `--json`: Output in JSON format
 - `--analyze`: Analyze logs and show statistics
+- `--ai-analyze`: Analyze logs using Claude AI
+- `--api-key <key>`: Claude API key for AI analysis
 - `--help`: Show help information
 
 ### Examples
@@ -101,6 +103,16 @@ mlp --file mattermost.log --analyze
 Analyze logs from a support packet:
 ```bash
 mlp --support-packet mattermost_support_packet.zip --analyze
+```
+
+Analyze logs using Claude AI:
+```bash
+mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY
+```
+
+Analyze support packet logs using Claude AI:
+```bash
+mlp --support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
 ```
 
 ## Output Format
@@ -154,6 +166,20 @@ The `--analyze` option provides a high-level overview of the log data, including
 - Common message patterns
 
 This analysis helps quickly identify trends, issues, and patterns in large log files without having to manually review thousands of entries.
+
+## AI-Powered Log Analysis
+
+The `--ai-analyze` option uses Claude Sonnet API to provide an intelligent analysis of your logs. This feature:
+
+- Sends a sample of your logs to Claude for analysis
+- Provides a comprehensive report of issues and patterns
+- Identifies potential root causes for errors
+- Offers recommendations for resolution
+- Gives context and insights that might not be obvious from statistical analysis
+
+To use this feature, you need a Claude API key from Anthropic. You can obtain one by signing up at [https://console.anthropic.com/](https://console.anthropic.com/).
+
+Note: When using AI analysis, a limited number of log entries are sent to the Claude API to stay within token limits. The tool automatically selects the most relevant entries.
 
 ## License
 

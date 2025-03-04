@@ -15,6 +15,8 @@ func main() {
 	userFilter := flag.String("user", "", "Filter logs by username")
 	jsonOutput := flag.Bool("json", false, "Output in JSON format")
 	analyze := flag.Bool("analyze", false, "Analyze logs and show statistics")
+	aiAnalyze := flag.Bool("ai-analyze", false, "Analyze logs using Claude AI")
+	apiKey := flag.String("api-key", "", "Claude API key for AI analysis")
 	help := flag.Bool("help", false, "Show help information")
 
 	// Parse command line arguments
@@ -50,7 +52,13 @@ func main() {
 	}
 
 	// Display logs in the requested format
-	if *analyze {
+	if *aiAnalyze {
+		if *apiKey == "" {
+			fmt.Println("Error: Claude API key is required for AI analysis. Use --api-key flag.")
+			os.Exit(1)
+		}
+		analyzeWithClaude(logs, *apiKey)
+	} else if *analyze {
 		analyzeAndDisplayStats(logs)
 	} else if *jsonOutput {
 		displayLogsJSON(logs)
@@ -70,6 +78,8 @@ func printUsage() {
 	fmt.Println("  --user <username>        Filter logs by username")
 	fmt.Println("  --json                   Output in JSON format")
 	fmt.Println("  --analyze                Analyze logs and show statistics")
+	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
+	fmt.Println("  --api-key <key>          Claude API key for AI analysis")
 	fmt.Println("  --help                   Show this help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  mlp --file mattermost.log")
@@ -79,4 +89,5 @@ func printUsage() {
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --level error")
 	fmt.Println("  mlp --file mattermost.log --analyze")
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
+	fmt.Println("  mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY")
 }
