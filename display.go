@@ -1,8 +1,11 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 )
 
@@ -20,9 +23,9 @@ const (
 )
 
 // displayLogsPretty outputs logs in a human-readable colored format
-func displayLogsPretty(logs []LogEntry) {
+func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 	if len(logs) == 0 {
-		fmt.Println("No log entries found matching your criteria.")
+		fmt.Fprintln(writer, "No log entries found matching your criteria.")
 		return
 	}
 
@@ -46,7 +49,7 @@ func displayLogsPretty(logs []LogEntry) {
 		}
 		
 		// Print the formatted log entry
-		fmt.Printf("%s [%s] %s%s%s\n", 
+		fmt.Fprintf(writer, "%s [%s] %s%s%s\n", 
 			colorCyan + timestamp + colorReset,
 			levelColored,
 			colorBold + log.Source + colorReset,
@@ -56,39 +59,75 @@ func displayLogsPretty(logs []LogEntry) {
 		
 		// Print user if available
 		if log.User != "" {
-			fmt.Printf("  %sUser:%s %s\n", colorPurple, colorReset, log.User)
+			fmt.Fprintf(writer, "  %sUser:%s %s\n", colorPurple, colorReset, log.User)
 		}
 		
 		// Print caller if available
 		if log.Caller != "" {
-			fmt.Printf("  %sCaller:%s %s\n", colorPurple, colorReset, log.Caller)
+			fmt.Fprintf(writer, "  %sCaller:%s %s\n", colorPurple, colorReset, log.Caller)
 		}
 		
 		// Print details if available
 		if log.Details != "" {
-			fmt.Printf("  %sDetails:%s %s\n", colorPurple, colorReset, log.Details)
+			fmt.Fprintf(writer, "  %sDetails:%s %s\n", colorPurple, colorReset, log.Details)
 		}
 		
 		// Add a separator between entries
-		fmt.Println(strings.Repeat("-", 80))
+		fmt.Fprintln(writer, strings.Repeat("-", 80))
 	}
 	
 	// Print summary
-	fmt.Printf("\nDisplayed %d log entries\n", len(logs))
+	fmt.Fprintf(writer, "\nDisplayed %d log entries\n", len(logs))
 }
 
 // displayLogsJSON outputs logs in JSON format
-func displayLogsJSON(logs []LogEntry) {
+func displayLogsJSON(logs []LogEntry, writer io.Writer) {
 	if len(logs) == 0 {
-		fmt.Println("[]")
+		fmt.Fprintln(writer, "[]")
 		return
 	}
 
 	output, err := json.MarshalIndent(logs, "", "  ")
 	if err != nil {
-		fmt.Printf("Error formatting JSON: %v\n", err)
+		fmt.Fprintf(writer, "Error formatting JSON: %v\n", err)
 		return
 	}
 	
-	fmt.Println(string(output))
+	fmt.Fprintln(writer, string(output))
+}
+
+// exportToCSV exports log entries to a CSV file
+func exportToCSV(logs []LogEntry, filePath string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write header
+	header := []string{"Timestamp", "Level", "Source", "Message", "User", "Caller", "Details"}
+	if err := writer.Write(header); err != nil {
+		return err
+	}
+
+	// Write data
+	for _, log := range logs {
+		row := []string{
+			log.Timestamp.Format(time.RFC3339),
+			log.Level,
+			log.Source,
+			log.Message,
+			log.User,
+			log.Caller,
+			log.Details,
+		}
+		if err := writer.Write(row); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

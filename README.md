@@ -50,14 +50,20 @@ mlp --support-packet <path> [options]
 - `--file <path>`: Path to the Mattermost log file
 - `--support-packet <path>`: Path to a Mattermost support packet zip file
 - `--search <term>`: Search term to filter logs
+- `--regex <pattern>`: Regular expression pattern to filter logs
 - `--level <level>`: Filter logs by level (info, error, debug, etc.)
 - `--user <username>`: Filter logs by username
+- `--start <time>`: Filter logs after this time (format: 2006-01-02T15:04:05)
+- `--end <time>`: Filter logs before this time (format: 2006-01-02T15:04:05)
 - `--json`: Output in JSON format
+- `--csv <path>`: Export logs to CSV file at specified path
+- `--output <path>`: Save output to file instead of stdout
 - `--analyze`: Analyze logs and show statistics
 - `--ai-analyze`: Analyze logs using Claude AI
 - `--api-key <key>`: Claude API key for AI analysis (or set CLAUDE_API_KEY environment variable)
 - `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
 - `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
+- `--interactive`: Launch interactive TUI mode for exploring logs
 - `--help`: Show help information
 
 ### Examples
@@ -105,6 +111,31 @@ mlp --file mattermost.log --analyze
 Analyze logs from a support packet:
 ```bash
 mlp --support-packet mattermost_support_packet.zip --analyze
+```
+
+Filter logs by time range:
+```bash
+mlp --file mattermost.log --start 2023-01-01T00:00:00 --end 2023-01-02T00:00:00
+```
+
+Use regular expressions for advanced filtering:
+```bash
+mlp --file mattermost.log --regex "error.*database"
+```
+
+Export logs to CSV for spreadsheet analysis:
+```bash
+mlp --file mattermost.log --csv logs_export.csv
+```
+
+Save output to a file:
+```bash
+mlp --file mattermost.log --analyze --output analysis_report.txt
+```
+
+Launch interactive TUI mode for exploring logs:
+```bash
+mlp --file mattermost.log --interactive
 ```
 
 Analyze logs using Claude AI:
@@ -184,6 +215,36 @@ The `--analyze` option provides a high-level overview of the log data, including
 - Common message patterns
 
 This analysis helps quickly identify trends, issues, and patterns in large log files without having to manually review thousands of entries.
+
+## Advanced Filtering
+
+The tool provides several ways to filter logs:
+
+- **Text Search**: Use `--search` to find logs containing specific text
+- **Regular Expressions**: Use `--regex` for pattern matching
+- **Level Filtering**: Use `--level` to focus on specific log levels
+- **User Filtering**: Use `--user` to find logs related to specific users
+- **Time Range**: Use `--start` and `--end` to filter logs within a specific time period
+
+## Output Options
+
+You can control how the results are displayed or saved:
+
+- **Pretty Print**: Default colored output for human readability
+- **JSON Format**: Use `--json` for machine-readable output
+- **CSV Export**: Use `--csv` to export logs to a CSV file for spreadsheet analysis
+- **File Output**: Use `--output` to save results to a file instead of displaying on screen
+
+## Interactive Mode
+
+The `--interactive` option launches a terminal-based UI that allows you to:
+
+- Browse through logs with keyboard navigation
+- Filter logs interactively
+- View detailed information about each log entry
+- Search within the loaded logs
+
+This mode is particularly useful for exploring large log files or investigating complex issues.
 
 ## AI-Powered Log Analysis
 

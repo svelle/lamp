@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -31,12 +32,37 @@ type JSONLogEntry struct {
 }
 
 // parseLogFile reads and parses a Mattermost log file, applying filters
-func parseLogFile(filePath, searchTerm, levelFilter, userFilter string) ([]LogEntry, error) {
+func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
+
+	// Parse time range filters if provided
+	var startTime, endTime time.Time
+	var err error
+	if startTimeStr != "" {
+		startTime, err = time.Parse("2006-01-02T15:04:05", startTimeStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid start time format: %v", err)
+		}
+	}
+	if endTimeStr != "" {
+		endTime, err = time.Parse("2006-01-02T15:04:05", endTimeStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid end time format: %v", err)
+		}
+	}
+
+	// Compile regex if provided
+	var regex *regexp.Regexp
+	if regexPattern != "" {
+		regex, err = regexp.Compile(regexPattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid regex pattern: %v", err)
+		}
+	}
 
 	var logs []LogEntry
 	scanner := bufio.NewScanner(file)
@@ -56,7 +82,7 @@ func parseLogFile(filePath, searchTerm, levelFilter, userFilter string) ([]LogEn
 		}
 
 		// Apply filters
-		if shouldIncludeEntry(entry, searchTerm, levelFilter, userFilter) {
+		if shouldIncludeEntry(entry, searchTerm, regex, levelFilter, userFilter, startTime, endTime) {
 			logs = append(logs, entry)
 		}
 	}
@@ -193,7 +219,7 @@ func parseTimestamp(timestampStr string) (time.Time, error) {
 }
 
 // shouldIncludeEntry checks if a log entry matches all the specified filters
-func shouldIncludeEntry(entry LogEntry, searchTerm, levelFilter, userFilter string) bool {
+func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, userFilter string, startTime, endTime time.Time) bool {
 	// Apply level filter
 	if levelFilter != "" && !strings.EqualFold(entry.Level, levelFilter) {
 		return false
@@ -201,6 +227,14 @@ func shouldIncludeEntry(entry LogEntry, searchTerm, levelFilter, userFilter stri
 
 	// Apply user filter
 	if userFilter != "" && !strings.Contains(strings.ToLower(entry.User), strings.ToLower(userFilter)) {
+		return false
+	}
+
+	// Apply time range filters
+	if !startTime.IsZero() && entry.Timestamp.Before(startTime) {
+		return false
+	}
+	if !endTime.IsZero() && entry.Timestamp.After(endTime) {
 		return false
 	}
 
@@ -213,6 +247,17 @@ func shouldIncludeEntry(entry LogEntry, searchTerm, levelFilter, userFilter stri
 		if !strings.Contains(messageLower, searchLower) && 
 		   !strings.Contains(sourceLower, searchLower) && 
 		   !strings.Contains(strings.ToLower(entry.Details), searchLower) {
+			return false
+		}
+	}
+
+	// Apply regex filter
+	if regex != nil {
+		// Check if regex matches any field
+		if !regex.MatchString(entry.Message) && 
+		   !regex.MatchString(entry.Source) && 
+		   !regex.MatchString(entry.Details) && 
+		   !regex.MatchString(entry.User) {
 			return false
 		}
 	}
