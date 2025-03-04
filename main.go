@@ -17,6 +17,7 @@ func main() {
 	analyze := flag.Bool("analyze", false, "Analyze logs and show statistics")
 	aiAnalyze := flag.Bool("ai-analyze", false, "Analyze logs using Claude AI")
 	apiKey := flag.String("api-key", "", "Claude API key for AI analysis")
+	maxEntries := flag.Int("max-entries", 100, "Maximum number of log entries to send to Claude AI")
 	help := flag.Bool("help", false, "Show help information")
 
 	// Parse command line arguments
@@ -63,7 +64,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		analyzeWithClaude(logs, apiKeyValue)
+		analyzeWithClaude(logs, apiKeyValue, *maxEntries)
 	} else if *analyze {
 		analyzeAndDisplayStats(logs)
 	} else if *jsonOutput {
@@ -86,6 +87,7 @@ func printUsage() {
 	fmt.Println("  --analyze                Analyze logs and show statistics")
 	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
 	fmt.Println("  --api-key <key>          Claude API key for AI analysis (or set CLAUDE_API_KEY env var)")
+	fmt.Println("  --max-entries <num>      Maximum number of log entries to send to Claude AI (default: 100)")
 	fmt.Println("  --help                   Show this help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  mlp --file mattermost.log")

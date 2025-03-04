@@ -12,7 +12,7 @@ import (
 
 const (
 	claudeAPIURL = "https://api.anthropic.com/v1/messages"
-	maxLogEntries = 100 // Limit the number of logs to send to Claude
+	defaultMaxLogEntries = 100 // Default limit for logs to send to Claude
 )
 
 // ClaudeRequest represents the request structure for Claude API
@@ -52,18 +52,23 @@ type ClaudeError struct {
 }
 
 // analyzeWithClaude sends log data to Claude API for analysis
-func analyzeWithClaude(logs []LogEntry, apiKey string) {
+func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int) {
 	fmt.Println("Analyzing logs with Claude Sonnet API...")
+	
+	// If maxEntries is not set (0), use the default
+	if maxEntries <= 0 {
+		maxEntries = defaultMaxLogEntries
+	}
 	
 	// Prepare logs for Claude
 	logsToAnalyze := logs
-	if len(logs) > maxLogEntries {
+	if len(logs) > maxEntries {
 		fmt.Printf("Limiting analysis to %d most recent log entries (out of %d total)\n", 
-			maxLogEntries, len(logs))
+			maxEntries, len(logs))
 		// Sort logs by timestamp (most recent first)
 		// This is a simple approach - in a real implementation, you might want to 
 		// use a more sophisticated selection strategy
-		logsToAnalyze = logs[len(logs)-maxLogEntries:]
+		logsToAnalyze = logs[len(logs)-maxEntries:]
 	}
 	
 	// Format logs for Claude
