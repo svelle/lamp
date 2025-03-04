@@ -32,6 +32,14 @@ type CountedItem struct {
 	Count int
 }
 
+import (
+	"fmt"
+	"io"
+	"sort"
+	"strings"
+	"time"
+)
+
 // analyzeAndDisplayStats analyzes log entries and displays statistics
 func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
 	if len(logs) == 0 {

@@ -38,20 +38,22 @@ func launchInteractiveMode(logs []LogEntry) error {
 		SetSelectedBackgroundColor(tcell.ColorDarkBlue)
 	
 	// Create details view
-	details := tview.NewTextView().
-		SetDynamicColors(true).
+	details := tview.NewTextView()
+	details.SetDynamicColors(true).
 		SetBorder(true).
 		SetTitle("Log Details")
 	
 	// Create filter input
 	filterInput := tview.NewInputField().
 		SetLabel("Filter: ").
-		SetFieldWidth(40).
-		SetDoneFunc(func(key tcell.Key) {
-			if key == tcell.KeyEnter {
-				updateLogList(logList, logs, filterInput.GetText(), details)
-			}
-		})
+		SetFieldWidth(40)
+	
+	// Set done function for filter input
+	filterInput.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			updateLogList(logList, logs, filterInput.GetText(), details)
+		}
+	})
 	
 	// Create status bar
 	statusBar := tview.NewTextView().
