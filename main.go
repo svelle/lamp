@@ -53,11 +53,17 @@ func main() {
 
 	// Display logs in the requested format
 	if *aiAnalyze {
-		if *apiKey == "" {
-			fmt.Println("Error: Claude API key is required for AI analysis. Use --api-key flag.")
-			os.Exit(1)
+		// Get API key from flag or environment variable
+		apiKeyValue := *apiKey
+		if apiKeyValue == "" {
+			apiKeyValue = os.Getenv("CLAUDE_API_KEY")
+			if apiKeyValue == "" {
+				fmt.Println("Error: Claude API key is required for AI analysis.")
+				fmt.Println("Provide it using --api-key flag or set the CLAUDE_API_KEY environment variable.")
+				os.Exit(1)
+			}
 		}
-		analyzeWithClaude(logs, *apiKey)
+		analyzeWithClaude(logs, apiKeyValue)
 	} else if *analyze {
 		analyzeAndDisplayStats(logs)
 	} else if *jsonOutput {
@@ -79,7 +85,7 @@ func printUsage() {
 	fmt.Println("  --json                   Output in JSON format")
 	fmt.Println("  --analyze                Analyze logs and show statistics")
 	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
-	fmt.Println("  --api-key <key>          Claude API key for AI analysis")
+	fmt.Println("  --api-key <key>          Claude API key for AI analysis (or set CLAUDE_API_KEY env var)")
 	fmt.Println("  --help                   Show this help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  mlp --file mattermost.log")
