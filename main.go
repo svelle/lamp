@@ -14,6 +14,7 @@ func main() {
 	levelFilter := flag.String("level", "", "Filter logs by level (info, error, debug, etc.)")
 	userFilter := flag.String("user", "", "Filter logs by username")
 	jsonOutput := flag.Bool("json", false, "Output in JSON format")
+	analyze := flag.Bool("analyze", false, "Analyze logs and show statistics")
 	help := flag.Bool("help", false, "Show help information")
 
 	// Parse command line arguments
@@ -49,7 +50,9 @@ func main() {
 	}
 
 	// Display logs in the requested format
-	if *jsonOutput {
+	if *analyze {
+		analyzeAndDisplayStats(logs)
+	} else if *jsonOutput {
 		displayLogsJSON(logs)
 	} else {
 		displayLogsPretty(logs)
@@ -66,6 +69,7 @@ func printUsage() {
 	fmt.Println("  --level <level>          Filter logs by level (info, error, debug, etc.)")
 	fmt.Println("  --user <username>        Filter logs by username")
 	fmt.Println("  --json                   Output in JSON format")
+	fmt.Println("  --analyze                Analyze logs and show statistics")
 	fmt.Println("  --help                   Show this help information")
 	fmt.Println("\nExamples:")
 	fmt.Println("  mlp --file mattermost.log")
@@ -73,4 +77,6 @@ func printUsage() {
 	fmt.Println("  mlp --file mattermost.log --level error --user admin")
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip")
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --level error")
+	fmt.Println("  mlp --file mattermost.log --analyze")
+	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
 }

@@ -53,6 +53,7 @@ mlp --support-packet <path> [options]
 - `--level <level>`: Filter logs by level (info, error, debug, etc.)
 - `--user <username>`: Filter logs by username
 - `--json`: Output in JSON format
+- `--analyze`: Analyze logs and show statistics
 - `--help`: Show help information
 
 ### Examples
@@ -90,6 +91,16 @@ mlp --support-packet mattermost_support_packet.zip
 Filter logs from a support packet:
 ```bash
 mlp --support-packet mattermost_support_packet.zip --level error
+```
+
+Analyze logs and show statistics:
+```bash
+mlp --file mattermost.log --analyze
+```
+
+Analyze logs from a support packet:
+```bash
+mlp --support-packet mattermost_support_packet.zip --analyze
 ```
 
 ## Output Format
@@ -130,6 +141,19 @@ The tool can extract and parse log files from Mattermost support packets. Suppor
 4. Display the combined results
 
 This is particularly useful for analyzing logs from multi-node Mattermost deployments where each node's logs are included in the support packet.
+
+## Log Analysis
+
+The `--analyze` option provides a high-level overview of the log data, including:
+
+- Basic statistics (total entries, time range, duration)
+- Log level distribution and error rate
+- Top log sources and active users
+- Most frequent error messages
+- Activity patterns by hour
+- Common message patterns
+
+This analysis helps quickly identify trends, issues, and patterns in large log files without having to manually review thousands of entries.
 
 ## License
 
