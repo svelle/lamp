@@ -119,7 +119,14 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 	analysis.TopSources = mapToSortedSlice(sourceCounts, 10)
 	analysis.TopUsers = mapToSortedSlice(userCounts, 10)
 	analysis.TopErrorMessages = mapToSortedSlice(errorMsgCounts, 10)
-	analysis.BusiestHours = mapToSortedSlice(hourCounts, 24)
+	
+	// Convert hourCounts (map[int]int) to string keys for mapToSortedSlice
+	hourCountsStr := make(map[string]int)
+	for hour, count := range hourCounts {
+		hourCountsStr[fmt.Sprintf("%d", hour)] = count
+	}
+	analysis.BusiestHours = mapToSortedSlice(hourCountsStr, 24)
+	
 	analysis.CommonPatterns = mapToSortedSlice(patternCounts, 10)
 
 	return analysis
