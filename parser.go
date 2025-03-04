@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,17 @@ type LogEntry struct {
 	Message   string    `json:"message"`
 	User      string    `json:"user,omitempty"`
 	Details   string    `json:"details,omitempty"`
+	Caller    string    `json:"caller,omitempty"`
+}
+
+// JSONLogEntry represents a JSON-formatted log entry
+type JSONLogEntry struct {
+	Timestamp string                 `json:"timestamp"`
+	Level     string                 `json:"level"`
+	Msg       string                 `json:"msg"`
+	Caller    string                 `json:"caller,omitempty"`
+	UserID    string                 `json:"user_id,omitempty"`
+	Extra     map[string]interface{} `json:"-"`
 }
 
 // parseLogFile reads and parses a Mattermost log file, applying filters
@@ -59,6 +71,11 @@ func parseLogFile(filePath, searchTerm, levelFilter, userFilter string) ([]LogEn
 // parseLine attempts to parse a single log line into a LogEntry
 func parseLine(line string) (LogEntry, error) {
 	var entry LogEntry
+
+	// Check if the line is in JSON format
+	if strings.HasPrefix(strings.TrimSpace(line), "{") {
+		return parseJSONLine(line)
+	}
 
 	// Basic format detection and parsing
 	// Example format: 2023-04-15T14:22:34.123Z [INFO] api.user.login.success
@@ -105,6 +122,55 @@ func parseLine(line string) (LogEntry, error) {
 	return entry, nil
 }
 
+// parseJSONLine parses a JSON-formatted log line
+func parseJSONLine(line string) (LogEntry, error) {
+	var entry LogEntry
+	var jsonEntry JSONLogEntry
+
+	// Unmarshal the JSON log entry
+	if err := json.Unmarshal([]byte(line), &jsonEntry); err != nil {
+		return entry, fmt.Errorf("failed to parse JSON log: %v", err)
+	}
+
+	// Extract additional fields
+	var extra map[string]interface{}
+	if err := json.Unmarshal([]byte(line), &extra); err == nil {
+		// Build details string from extra fields
+		var details strings.Builder
+		for k, v := range extra {
+			// Skip fields we already handle
+			if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
+				continue
+			}
+			if details.Len() > 0 {
+				details.WriteString(", ")
+			}
+			details.WriteString(fmt.Sprintf("%s=%v", k, v))
+		}
+		entry.Details = details.String()
+	}
+
+	// Parse timestamp
+	timestamp, err := parseTimestamp(jsonEntry.Timestamp)
+	if err != nil {
+		return entry, err
+	}
+	entry.Timestamp = timestamp
+	
+	// Set other fields
+	entry.Level = jsonEntry.Level
+	entry.Message = jsonEntry.Msg
+	entry.User = jsonEntry.UserID
+	
+	// Set source from caller if available
+	if jsonEntry.Caller != "" {
+		entry.Source = jsonEntry.Caller
+		entry.Caller = jsonEntry.Caller
+	}
+
+	return entry, nil
+}
+
 // parseTimestamp attempts to parse a timestamp string into a time.Time
 func parseTimestamp(timestampStr string) (time.Time, error) {
 	// Try common Mattermost timestamp formats
@@ -113,6 +179,8 @@ func parseTimestamp(timestampStr string) (time.Time, error) {
 		time.RFC3339Nano,
 		"2006-01-02T15:04:05.000Z",
 		"2006/01/02 15:04:05",
+		"2006-01-02 15:04:05.000 Z", // Format from the example JSON log
+		"2006-01-02 15:04:05.000 MST",
 	}
 
 	for _, format := range formats {

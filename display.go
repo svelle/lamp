@@ -59,6 +59,11 @@ func displayLogsPretty(logs []LogEntry) {
 			fmt.Printf("  %sUser:%s %s\n", colorPurple, colorReset, log.User)
 		}
 		
+		// Print caller if available
+		if log.Caller != "" {
+			fmt.Printf("  %sCaller:%s %s\n", colorPurple, colorReset, log.Caller)
+		}
+		
 		// Print details if available
 		if log.Details != "" {
 			fmt.Printf("  %sDetails:%s %s\n", colorPurple, colorReset, log.Details)
