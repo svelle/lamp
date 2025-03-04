@@ -39,9 +39,16 @@ A command-line tool for parsing, filtering, and displaying Mattermost log files 
 mlp --file <path> [options]
 ```
 
+or
+
+```
+mlp --support-packet <path> [options]
+```
+
 ### Options
 
-- `--file <path>`: Path to the Mattermost log file (required)
+- `--file <path>`: Path to the Mattermost log file
+- `--support-packet <path>`: Path to a Mattermost support packet zip file
 - `--search <term>`: Search term to filter logs
 - `--level <level>`: Filter logs by level (info, error, debug, etc.)
 - `--user <username>`: Filter logs by username
@@ -75,6 +82,16 @@ Combine multiple filters:
 mlp --file mattermost.log --level error --search "database"
 ```
 
+Parse logs from a Mattermost support packet:
+```bash
+mlp --support-packet mattermost_support_packet.zip
+```
+
+Filter logs from a support packet:
+```bash
+mlp --support-packet mattermost_support_packet.zip --level error
+```
+
 ## Output Format
 
 ### Pretty Print (Default)
@@ -102,6 +119,17 @@ The parser supports both traditional Mattermost log formats and the newer JSON-f
 ```
 {"timestamp":"2025-02-14 17:11:10.308 Z","level":"debug","msg":"Email batching job ran.","caller":"email/email_batching.go:138","number_of_users":0}
 ```
+
+## Support Packet Processing
+
+The tool can extract and parse log files from Mattermost support packets. Support packets are ZIP files that contain server logs, configuration information, and diagnostic data. When using the `--support-packet` option, the tool will:
+
+1. Extract log files from the ZIP archive
+2. Parse each log file
+3. Apply any specified filters (search term, level, user)
+4. Display the combined results
+
+This is particularly useful for analyzing logs from multi-node Mattermost deployments where each node's logs are included in the support packet.
 
 ## License
 
