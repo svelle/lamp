@@ -10,6 +10,23 @@ import (
 	"time"
 )
 
+// writeLogsToJSON writes log entries to a JSON file
+func writeLogsToJSON(logs []LogEntry, filePath string) error {
+	file, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(logs); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // ANSI color codes for pretty output
 const (
 	colorReset  = "\033[0m"

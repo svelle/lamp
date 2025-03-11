@@ -25,6 +25,7 @@ func main() {
 	aiAnalyze := flag.Bool("ai-analyze", false, "Analyze logs using Claude AI")
 	apiKey := flag.String("api-key", "", "Claude API key for AI analysis")
 	trim := flag.Bool("trim", false, "Remove entries with duplicate information")
+	trimJSON := flag.String("trim-json", "", "Write deduplicated logs to a JSON file at specified path")
 	maxEntries := flag.Int("max-entries", 100, "Maximum number of log entries to send to Claude AI")
 	problem := flag.String("problem", "", "Description of the problem you're investigating (helps guide AI analysis)")
 	interactive := flag.Bool("interactive", false, "Launch interactive TUI mode")
@@ -69,6 +70,15 @@ func main() {
 		logs = trimDuplicateLogInfo(logs)
 		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n", 
 			originalCount, len(logs), originalCount-len(logs))
+		
+		// Write deduplicated logs to JSON file if requested
+		if *trimJSON != "" {
+			if err := writeLogsToJSON(logs, *trimJSON); err != nil {
+				fmt.Printf("Error writing deduplicated logs to JSON: %v\n", err)
+				os.Exit(1)
+			}
+			fmt.Printf("Deduplicated logs written to JSON file: %s\n", *trimJSON)
+		}
 	}
 
 	// Redirect output if requested
@@ -144,6 +154,7 @@ func printUsage() {
 	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
 	fmt.Println("  --api-key <key>          Claude API key for AI analysis (or set CLAUDE_API_KEY env var)")
 	fmt.Println("  --trim                   Remove entries with duplicate information")
+	fmt.Println("  --trim-json <path>       Write deduplicated logs to a JSON file at specified path")
 	fmt.Println("  --max-entries <num>      Maximum number of log entries to send to Claude AI (default: 100)")
 	fmt.Println("  --problem \"<description>\" Description of the problem you're investigating (helps guide AI analysis)")
 	fmt.Println("  --interactive            Launch interactive TUI mode for exploring logs")
@@ -158,4 +169,5 @@ func printUsage() {
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
 	fmt.Println("  mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY")
 	fmt.Println("  mlp --file mattermost.log --trim --level error")
+	fmt.Println("  mlp --file mattermost.log --trim --trim-json deduped_logs.json")
 }
