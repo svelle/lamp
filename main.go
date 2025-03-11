@@ -23,6 +23,7 @@ func main() {
 	analyze := flag.Bool("analyze", false, "Analyze logs and show statistics")
 	aiAnalyze := flag.Bool("ai-analyze", false, "Analyze logs using Claude AI")
 	apiKey := flag.String("api-key", "", "Claude API key for AI analysis")
+	trim := flag.Bool("trim", false, "Remove entries with duplicate information")
 	maxEntries := flag.Int("max-entries", 100, "Maximum number of log entries to send to Claude AI")
 	problem := flag.String("problem", "", "Description of the problem you're investigating (helps guide AI analysis)")
 	interactive := flag.Bool("interactive", false, "Launch interactive TUI mode")
@@ -58,6 +59,12 @@ func main() {
 	if err != nil {
 		fmt.Printf("Error parsing log file: %v\n", err)
 		os.Exit(1)
+	}
+	
+	// Apply trim if requested
+	if *trim {
+		logs = trimDuplicateLogInfo(logs)
+		fmt.Printf("Trimmed to %d entries after removing duplicates\n", len(logs))
 	}
 
 	// Redirect output if requested
@@ -132,6 +139,7 @@ func printUsage() {
 	fmt.Println("  --analyze                Analyze logs and show statistics")
 	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
 	fmt.Println("  --api-key <key>          Claude API key for AI analysis (or set CLAUDE_API_KEY env var)")
+	fmt.Println("  --trim                   Remove entries with duplicate information")
 	fmt.Println("  --max-entries <num>      Maximum number of log entries to send to Claude AI (default: 100)")
 	fmt.Println("  --problem \"<description>\" Description of the problem you're investigating (helps guide AI analysis)")
 	fmt.Println("  --interactive            Launch interactive TUI mode for exploring logs")
@@ -145,4 +153,5 @@ func printUsage() {
 	fmt.Println("  mlp --file mattermost.log --analyze")
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
 	fmt.Println("  mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY")
+	fmt.Println("  mlp --file mattermost.log --trim --level error")
 }

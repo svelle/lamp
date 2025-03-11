@@ -219,6 +219,48 @@ func parseTimestamp(timestampStr string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unable to parse timestamp: %s", timestampStr)
 }
 
+// trimDuplicateLogInfo removes log entries that contain duplicate information
+func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
+	if len(logs) == 0 {
+		return logs
+	}
+	
+	// Map to track seen log signatures
+	seen := make(map[string]bool)
+	var result []LogEntry
+	
+	for _, entry := range logs {
+		// Create a signature of the log based on level, source, and the core message
+		// Strip timestamps, specific IDs, and other variable data
+		msgCore := entry.Message
+		
+		// Replace specific patterns that often change but don't affect the message meaning
+		// Like IDs, timestamps, specific values
+		re := regexp.MustCompile(`\b[0-9a-f]{8,32}\b`) // Match typical IDs
+		msgCore = re.ReplaceAllString(msgCore, "ID")
+		
+		re = regexp.MustCompile(`\d{4}-\d{2}-\d{2}`) // Match dates
+		msgCore = re.ReplaceAllString(msgCore, "DATE")
+		
+		re = regexp.MustCompile(`\d+\.\d+\.\d+\.\d+`) // Match IP addresses
+		msgCore = re.ReplaceAllString(msgCore, "IP")
+		
+		re = regexp.MustCompile(`\d+ms|\d+s|\d+ns`) // Match time durations
+		msgCore = re.ReplaceAllString(msgCore, "DURATION")
+		
+		// Create a signature combining important fields
+		signature := fmt.Sprintf("%s:%s:%s", entry.Level, entry.Source, msgCore)
+		
+		// If we haven't seen this signature, add it to results
+		if !seen[signature] {
+			seen[signature] = true
+			result = append(result, entry)
+		}
+	}
+	
+	return result
+}
+
 // shouldIncludeEntry checks if a log entry matches all the specified filters
 func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, userFilter string, startTime, endTime time.Time) bool {
 	// Apply level filter
