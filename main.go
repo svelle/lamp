@@ -64,6 +64,7 @@ func main() {
 	
 	// Apply trim if requested
 	if *trim {
+		fmt.Printf("Starting deduplication of %d log entries...\n", len(logs))
 		originalCount := len(logs)
 		logs = trimDuplicateLogInfo(logs)
 		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n", 

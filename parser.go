@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/schollz/progressbar/v3"
 )
 
 // LogEntry represents a parsed log entry from Mattermost logs
@@ -232,10 +234,24 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 	// Similarity threshold (0.0-1.0) - higher means more strict matching
 	const similarityThreshold = 0.8
 	
+	// Create progress bar
+	bar := progressbar.NewOptions(len(logs),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetWidth(40),
+		progressbar.OptionSetDescription("[cyan]Deduplicating logs[reset]"),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
+	
 	// Process each log entry
 	for i, entry := range logs {
 		// Skip if already processed
 		if processedEntries[i] {
+			bar.Add(1)
 			continue
 		}
 		
@@ -278,7 +294,14 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 				processedEntries[j] = true
 			}
 		}
+		
+		// Update progress bar
+		bar.Add(1)
 	}
+	
+	// Finish the progress bar with a newline
+	bar.Finish()
+	fmt.Println()
 	
 	return result
 }
