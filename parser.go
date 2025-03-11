@@ -30,6 +30,7 @@ type JSONLogEntry struct {
 	Msg       string                 `json:"msg"`
 	Caller    string                 `json:"caller,omitempty"`
 	UserID    string                 `json:"user_id,omitempty"`
+	Error     string                 `json:"error,omitempty"`
 	Extra     map[string]interface{} `json:"-"`
 }
 
@@ -158,7 +159,11 @@ func parseJSONLine(line string) (LogEntry, error) {
 
 	// Unmarshal the JSON log entry
 	if err := json.Unmarshal([]byte(line), &jsonEntry); err != nil {
-		return entry, fmt.Errorf("failed to parse JSON log: %v", err)
+		// Try to recover from JSON parsing errors by cleaning up common issues
+		fixedLine := strings.ReplaceAll(line, "\\\"", "'")
+		if err := json.Unmarshal([]byte(fixedLine), &jsonEntry); err != nil {
+			return entry, fmt.Errorf("failed to parse JSON log: %v", err)
+		}
 	}
 
 	// Extract additional fields
@@ -171,10 +176,26 @@ func parseJSONLine(line string) (LogEntry, error) {
 			if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
 				continue
 			}
+			
+			// Special handling for error field
+			if k == "error" && v != nil {
+				if details.Len() > 0 {
+					details.WriteString(", ")
+				}
+				details.WriteString(fmt.Sprintf("error=%v", v))
+				continue
+			}
+			
 			if details.Len() > 0 {
 				details.WriteString(", ")
 			}
-			details.WriteString(fmt.Sprintf("%s=%v", k, v))
+			
+			// Handle nil values
+			if v == nil {
+				details.WriteString(fmt.Sprintf("%s=nil", k))
+			} else {
+				details.WriteString(fmt.Sprintf("%s=%v", k, v))
+			}
 		}
 		entry.Details = details.String()
 	}
@@ -182,9 +203,18 @@ func parseJSONLine(line string) (LogEntry, error) {
 	// Parse timestamp
 	timestamp, err := parseTimestamp(jsonEntry.Timestamp)
 	if err != nil {
-		return entry, err
+		// If parsing failed with the standard format, try to fix common timestamp issues
+		fixedTimestamp := strings.TrimSpace(jsonEntry.Timestamp)
+		timestamp, err = parseTimestamp(fixedTimestamp)
+		if err != nil {
+			// Continue with a default timestamp rather than failing completely
+			entry.Timestamp = time.Now()
+		} else {
+			entry.Timestamp = timestamp
+		}
+	} else {
+		entry.Timestamp = timestamp
 	}
-	entry.Timestamp = timestamp
 	
 	// Set other fields
 	entry.Level = jsonEntry.Level
@@ -208,8 +238,13 @@ func parseTimestamp(timestampStr string) (time.Time, error) {
 		time.RFC3339Nano,
 		"2006-01-02T15:04:05.000Z",
 		"2006/01/02 15:04:05",
-		"2006-01-02 15:04:05.000 Z", // Format from the example JSON log
+		"2006-01-02 15:04:05.000 Z",
 		"2006-01-02 15:04:05.000 MST",
+		// Additional formats with timezone offsets
+		"2006-01-02 15:04:05.000 -07:00",
+		"2006-01-02 15:04:05.000 +07:00",
+		"2006-01-02 15:04:05.999 -07:00",
+		"2006-01-02 15:04:05.999 +07:00",
 	}
 
 	for _, format := range formats {
