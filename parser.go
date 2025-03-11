@@ -233,11 +233,13 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 	
 	// Similarity threshold (0.0-1.0) - higher means more strict matching
 	const similarityThreshold = 0.8
+	const updateInterval = 10 // Update progress bar description every N entries
 	
 	// Create progress bar
 	bar := progressbar.NewOptions(len(logs),
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionSetWidth(40),
+		progressbar.OptionShowCount(),
 		progressbar.OptionSetDescription("[cyan]Deduplicating logs[reset]"),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
@@ -245,13 +247,26 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 			SaucerPadding: " ",
 			BarStart:      "[",
 			BarEnd:        "]",
+		}),
+		progressbar.OptionOnCompletion(func() {
+			fmt.Println()
 		}))
+	
+	// Render initial blank progress bar
+	bar.RenderBlank()
+	
+	removedCount := 0
 	
 	// Process each log entry
 	for i, entry := range logs {
+		// Update description periodically to show activity
+		if i%updateInterval == 0 {
+			bar.Describe(fmt.Sprintf("[cyan]Processed: %d/%d - Removed: %d[reset]", i, len(logs), removedCount))
+		}
+		
 		// Skip if already processed
 		if processedEntries[i] {
-			bar.Add(1)
+			_ = bar.Add(1) // Ignore error
 			continue
 		}
 		
@@ -264,6 +279,8 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		
 		// Get words from normalized message (for word-based similarity)
 		baseWords := strings.Fields(normalizedMsg)
+		
+		processedInThisIteration := 0
 		
 		// Check remaining entries for similarity
 		for j := i + 1; j < len(logs); j++ {
@@ -292,16 +309,22 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 			// Compare messages
 			if isSimilarMessage(normalizedMsg, compMsg, baseWords, similarityThreshold) {
 				processedEntries[j] = true
+				processedInThisIteration++
+				removedCount++
+				
+				// Update progress description more frequently during batch removals
+				if processedInThisIteration%10 == 0 {
+					bar.Describe(fmt.Sprintf("[cyan]Processed: %d/%d - Removed: %d[reset]", i, len(logs), removedCount))
+				}
 			}
 		}
 		
 		// Update progress bar
-		bar.Add(1)
+		_ = bar.Add(1) // Ignore error
 	}
 	
-	// Finish the progress bar with a newline
-	bar.Finish()
-	fmt.Println()
+	// Ensure the bar is completed
+	_ = bar.Finish()
 	
 	return result
 }
