@@ -7,6 +7,7 @@ import (
 	"os"
 )
 
+// mattermost-log-parser (mlp) is a tool for parsing and analyzing Mattermost log files
 func main() {
 	// Define command line flags
 	filePath := flag.String("file", "", "Path to the Mattermost log file")
@@ -63,8 +64,10 @@ func main() {
 	
 	// Apply trim if requested
 	if *trim {
+		originalCount := len(logs)
 		logs = trimDuplicateLogInfo(logs)
-		fmt.Printf("Trimmed to %d entries after removing duplicates\n", len(logs))
+		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n", 
+			originalCount, len(logs), originalCount-len(logs))
 	}
 
 	// Redirect output if requested
@@ -123,7 +126,7 @@ func main() {
 
 func printUsage() {
 	fmt.Println("Mattermost Log Parser (mlp)")
-	fmt.Println("Usage: mlp --file <path> [options] OR mlp --support-packet <path> [options]")
+	fmt.Println("Usage: ./mlp --file <path> [options] OR ./mlp --support-packet <path> [options]")
 	fmt.Println("\nOptions:")
 	fmt.Println("  --file <path>            Path to the Mattermost log file")
 	fmt.Println("  --support-packet <path>  Path to a Mattermost support packet zip file")
