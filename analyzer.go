@@ -40,18 +40,25 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
 		return
 	}
 
-	// Count unique entries vs total entries with duplicates
+	// Check if any logs have duplicate counts
+	hasDuplicateCounts := false
 	uniqueEntries := len(logs)
 	totalEntries := 0
+	
 	for _, log := range logs {
 		count := log.DuplicateCount
+		if count > 1 {
+			hasDuplicateCounts = true
+		}
+		
 		if count == 0 {
 			count = 1
 		}
 		totalEntries += count
 	}
 
-	isDeduplicated := totalEntries > uniqueEntries
+	// Only consider logs deduplicated if they actually have duplicate counts
+	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries
 
 	analysis := analyzeLogs(logs)
 	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries)
