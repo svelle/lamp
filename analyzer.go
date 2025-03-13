@@ -34,7 +34,7 @@ type CountedItem struct {
 }
 
 // analyzeAndDisplayStats analyzes log entries and displays statistics
-func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
+func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 	if len(logs) == 0 {
 		fmt.Fprintln(writer, "No log entries to analyze.")
 		return
@@ -57,8 +57,8 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
 		totalEntries += count
 	}
 
-	// Only consider logs deduplicated if they actually have duplicate counts
-	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries
+	// Only consider logs deduplicated if they actually have duplicate counts AND showDupes is true
+	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries && showDupes
 
 	analysis := analyzeLogs(logs)
 	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries)
