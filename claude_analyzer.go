@@ -117,7 +117,7 @@ Focus on actionable insights and be specific about what you find.`
 	
 	// Create the request
 	request := ClaudeRequest{
-		Model:     "claude-3-sonnet-20240229",
+		Model:     "claude-3-5-haiku-latest",
 		MaxTokens: 4000,
 		Messages: []Message{
 			{
