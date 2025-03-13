@@ -67,13 +67,19 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 		}
 		
 		// Print the formatted log entry
-		fmt.Fprintf(writer, "%s [%s] %s%s%s\n", 
+		fmt.Fprintf(writer, "%s [%s] %s%s%s", 
 			colorCyan + timestamp + colorReset,
 			levelColored,
 			colorBold + log.Source + colorReset,
 			colorWhite + " → " + colorReset,
 			log.Message,
 		)
+		
+		// Print duplicate count if more than 1
+		if log.DuplicateCount > 1 {
+			fmt.Fprintf(writer, " %s(repeated %d times)%s", colorYellow, log.DuplicateCount, colorReset)
+		}
+		fmt.Fprintln(writer)
 		
 		// Print user if available
 		if log.User != "" {

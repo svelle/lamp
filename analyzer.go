@@ -63,9 +63,18 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 		analysis.TimeRange.Start = logs[0].Timestamp
 		analysis.TimeRange.End = logs[0].Timestamp
 	}
+	
+	// Track total entries including duplicates
+	totalWithDuplicates := 0
 
 	// Process each log entry
 	for _, log := range logs {
+		// Get the count (either the duplicate count or 1 if not set)
+		count := log.DuplicateCount
+		if count == 0 {
+			count = 1
+		}
+		totalWithDuplicates += count
 		// Update time range
 		if log.Timestamp.Before(analysis.TimeRange.Start) {
 			analysis.TimeRange.Start = log.Timestamp
@@ -75,16 +84,16 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 		}
 
 		// Count log levels
-		analysis.LevelCounts[strings.ToUpper(log.Level)]++
+		analysis.LevelCounts[strings.ToUpper(log.Level)] += count
 
 		// Count sources
 		if log.Source != "" {
-			sourceCounts[log.Source]++
+			sourceCounts[log.Source] += count
 		}
 
 		// Count users
 		if log.User != "" {
-			userCounts[log.User]++
+			userCounts[log.User] += count
 		}
 
 		// Count error messages
@@ -94,12 +103,12 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 			if len(shortMsg) > 50 {
 				shortMsg = shortMsg[:50] + "..."
 			}
-			errorMsgCounts[shortMsg]++
+			errorMsgCounts[shortMsg] += count
 		}
 
 		// Count activity by hour
 		hour := log.Timestamp.Hour()
-		hourCounts[hour]++
+		hourCounts[hour] += count
 
 		// Identify common patterns in messages
 		words := strings.Fields(log.Message)
@@ -108,13 +117,16 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 			if len(words) > 1 {
 				pattern += " " + words[1]
 			}
-			patternCounts[pattern]++
+			patternCounts[pattern] += count
 		}
 	}
 
 	// Calculate error rate
 	errorCount := analysis.LevelCounts["ERROR"] + analysis.LevelCounts["FATAL"]
-	analysis.ErrorRate = float64(errorCount) / float64(analysis.TotalEntries) * 100
+	analysis.ErrorRate = float64(errorCount) / float64(totalWithDuplicates) * 100
+	
+	// Update total entries to include duplicates
+	analysis.TotalEntries = totalWithDuplicates
 
 	// Convert maps to sorted slices
 	analysis.TopSources = mapToSortedSlice(sourceCounts, 10)
@@ -164,7 +176,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer) {
 	
 	// Basic statistics
 	fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
-	fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
+	fmt.Fprintf(writer, "Total Log Entries: %d (including duplicates)\n", analysis.TotalEntries)
 	fmt.Fprintf(writer, "Time Range: %s to %s\n", 
 		analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
 		analysis.TimeRange.End.Format("2006-01-02 15:04:05"))

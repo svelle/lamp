@@ -121,12 +121,17 @@ func updateLogList(list *tview.List, logs []LogEntry, filter string, detailsView
 		levelColor := getLevelColorName(log.Level)
 		timestamp := log.Timestamp.Format("15:04:05")
 		
+		message := truncateString(log.Message, 80)
+		if log.DuplicateCount > 1 {
+			message = fmt.Sprintf("%s [yellow](×%d)", message, log.DuplicateCount)
+		}
+		
 		list.AddItem(
 			fmt.Sprintf("[%s]%s[white] [%s] %s", 
 				levelColor, 
 				log.Level, 
 				timestamp,
-				truncateString(log.Message, 80)),
+				message),
 			log.Source,
 			0,
 			func(index int) func() {
@@ -163,6 +168,10 @@ func showLogDetails(log LogEntry, view *tview.TextView) {
 	}
 	
 	sb.WriteString(fmt.Sprintf("[yellow]Message:[white]\n%s\n\n", log.Message))
+	
+	if log.DuplicateCount > 1 {
+		sb.WriteString(fmt.Sprintf("[yellow]Occurrences:[white] %d\n\n", log.DuplicateCount))
+	}
 	
 	if log.Details != "" {
 		sb.WriteString(fmt.Sprintf("[yellow]Details:[white]\n%s\n", log.Details))
