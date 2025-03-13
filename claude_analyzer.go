@@ -23,7 +23,6 @@ type ClaudeRequest struct {
 	System      string          `json:"system"`
 	Temperature float64         `json:"temperature"`
 	Thinking    *ThinkingConfig `json:"thinking,omitempty"`
-	Betas       []string        `json:"betas,omitempty"`
 }
 
 // ThinkingConfig represents the configuration for Claude's thinking mode
@@ -144,8 +143,6 @@ Focus on actionable insights and be specific about what you find.`
 			Type:         "enabled",
 			BudgetTokens: thinkingBudget,
 		}
-		// Enable 128K output beta feature
-		request.Betas = []string{"output-128k-2025-02-19"}
 		fmt.Printf("Extended thinking mode enabled with %d tokens budget\n", thinkingBudget)
 	}
 	
