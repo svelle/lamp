@@ -139,11 +139,17 @@ Focus on actionable insights and be specific about what you find.`
 	// Enable thinking mode if thinkingBudget is set
 	if thinkingBudget > 0 {
 		request.Model = "claude-3-7-sonnet-latest"
+		
+		// Ensure max_tokens is larger than thinking budget (Claude requirement)
+		responseTokens := 4000  // Default tokens for actual response
+		request.MaxTokens = thinkingBudget + responseTokens
+		
 		request.Thinking = &ThinkingConfig{
 			Type:         "enabled",
 			BudgetTokens: thinkingBudget,
 		}
-		fmt.Printf("Extended thinking mode enabled with %d tokens budget\n", thinkingBudget)
+		fmt.Printf("Extended thinking mode enabled with %d tokens budget (total max tokens: %d)\n", 
+			thinkingBudget, request.MaxTokens)
 	}
 	
 	// Convert request to JSON
