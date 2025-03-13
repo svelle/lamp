@@ -144,6 +144,9 @@ Focus on actionable insights and be specific about what you find.`
 		responseTokens := 4000  // Default tokens for actual response
 		request.MaxTokens = thinkingBudget + responseTokens
 		
+		// Set temperature to 1 when thinking is enabled (Claude requirement)
+		request.Temperature = 1.0
+		
 		request.Thinking = &ThinkingConfig{
 			Type:         "enabled",
 			BudgetTokens: thinkingBudget,
