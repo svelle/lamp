@@ -112,14 +112,29 @@ Analyze the provided logs and provide a comprehensive report including:
 
 Focus on actionable insights and be specific about what you find.`
 
+	// Use a more concise prompt for Claude 3.7 Sonnet with thinking mode
+	if thinkingBudget > 0 {
+		systemPrompt = `You are an expert log analyzer for Mattermost server logs. Analyze these logs and identify issues, patterns, and solutions.`
+	}
+
 	// Create the user prompt
 	userPrompt := ""
 	if problemStatement != "" {
-		userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.", 
-			problemStatement, len(logsToAnalyze), logText.String())
+		if thinkingBudget > 0 {
+			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %d Mattermost server log entries to analyze:\n\n%s", 
+				problemStatement, len(logsToAnalyze), logText.String())
+		} else {
+			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.", 
+				problemStatement, len(logsToAnalyze), logText.String())
+		}
 	} else {
-		userPrompt = fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
-			len(logsToAnalyze), logText.String())
+		if thinkingBudget > 0 {
+			userPrompt = fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s", 
+				len(logsToAnalyze), logText.String())
+		} else {
+			userPrompt = fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
+				len(logsToAnalyze), logText.String())
+		}
 	}
 	
 	// Create the request
