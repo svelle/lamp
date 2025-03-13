@@ -60,12 +60,12 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 	// Only consider logs deduplicated if they actually have duplicate counts AND showDupes is true
 	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries && showDupes
 
-	analysis := analyzeLogs(logs)
+	analysis := analyzeLogs(logs, showDupes)
 	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries)
 }
 
 // analyzeLogs performs analysis on log entries
-func analyzeLogs(logs []LogEntry) LogAnalysis {
+func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	analysis := LogAnalysis{
 		TotalEntries: len(logs),
 		LevelCounts:  make(map[string]int),
@@ -90,9 +90,9 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 	// Process each log entry
 	for _, log := range logs {
 		// Get the count (either the duplicate count or 1 if not set)
-		count := log.DuplicateCount
-		if count == 0 {
-			count = 1
+		count := 1
+		if showDupes && log.DuplicateCount > 1 {
+			count = log.DuplicateCount
 		}
 		totalWithDuplicates += count
 		// Update time range
