@@ -17,11 +17,19 @@ const (
 
 // ClaudeRequest represents the request structure for Claude API
 type ClaudeRequest struct {
-	Model       string    `json:"model"`
-	MaxTokens   int       `json:"max_tokens"`
-	Messages    []Message `json:"messages"`
-	System      string    `json:"system"`
-	Temperature float64   `json:"temperature"`
+	Model       string          `json:"model"`
+	MaxTokens   int             `json:"max_tokens"`
+	Messages    []Message       `json:"messages"`
+	System      string          `json:"system"`
+	Temperature float64         `json:"temperature"`
+	Thinking    *ThinkingConfig `json:"thinking,omitempty"`
+	Betas       []string        `json:"betas,omitempty"`
+}
+
+// ThinkingConfig represents the configuration for Claude's thinking mode
+type ThinkingConfig struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens"`
 }
 
 // Message represents a message in the Claude API request
@@ -52,7 +60,7 @@ type ClaudeError struct {
 }
 
 // analyzeWithClaude sends log data to Claude API for analysis
-func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemStatement string) {
+func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemStatement string, thinkingBudget int) {
 	fmt.Println("Analyzing logs with Claude Sonnet API...")
 	
 	// If maxEntries is not set (0), use the default
@@ -129,6 +137,18 @@ Focus on actionable insights and be specific about what you find.`
 		Temperature: 0.3,
 	}
 	
+	// Enable thinking mode if thinkingBudget is set
+	if thinkingBudget > 0 {
+		request.Model = "claude-3-7-sonnet-latest"
+		request.Thinking = &ThinkingConfig{
+			Type:         "enabled",
+			BudgetTokens: thinkingBudget,
+		}
+		// Enable 128K output beta feature
+		request.Betas = []string{"output-128k-2025-02-19"}
+		fmt.Printf("Extended thinking mode enabled with %d tokens budget\n", thinkingBudget)
+	}
+	
 	// Convert request to JSON
 	requestJSON, err := json.Marshal(request)
 	if err != nil {
@@ -196,9 +216,50 @@ Focus on actionable insights and be specific about what you find.`
 	fmt.Println("CLAUDE AI LOG ANALYSIS")
 	fmt.Println(strings.Repeat("=", 80))
 	
-	for _, content := range claudeResponse.Content {
-		if content.Type == "text" {
-			fmt.Println(content.Text)
+	// Check if we're using extended thinking mode
+	if thinkingBudget > 0 {
+		// Look for thinking content and final answer
+		var thinkingOutput, finalAnswer string
+		for _, content := range claudeResponse.Content {
+			if content.Type == "text" {
+				// If the content contains "[Thinking]", it's the thinking output
+				if strings.Contains(content.Text, "[Thinking]") {
+					thinkingOutput = content.Text
+				} else {
+					// Otherwise, it's the final answer
+					finalAnswer = content.Text
+				}
+			}
+		}
+		
+		// Display thinking output if available
+		if thinkingOutput != "" {
+			fmt.Println("\n" + strings.Repeat("-", 80))
+			fmt.Println("CLAUDE THINKING PROCESS:")
+			fmt.Println(strings.Repeat("-", 80))
+			fmt.Println(thinkingOutput)
+			fmt.Println(strings.Repeat("-", 80))
+			fmt.Println("FINAL ANALYSIS:")
+			fmt.Println(strings.Repeat("-", 80))
+		}
+		
+		// Display final answer
+		if finalAnswer != "" {
+			fmt.Println(finalAnswer)
+		} else {
+			// If there's no separate final answer, display all content
+			for _, content := range claudeResponse.Content {
+				if content.Type == "text" {
+					fmt.Println(content.Text)
+				}
+			}
+		}
+	} else {
+		// Standard mode - display all content
+		for _, content := range claudeResponse.Content {
+			if content.Type == "text" {
+				fmt.Println(content.Text)
+			}
 		}
 	}
 	

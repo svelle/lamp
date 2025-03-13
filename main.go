@@ -28,6 +28,7 @@ func main() {
 	trimJSON := flag.String("trim-json", "", "Write deduplicated logs to a JSON file at specified path")
 	maxEntries := flag.Int("max-entries", 100, "Maximum number of log entries to send to Claude AI")
 	problem := flag.String("problem", "", "Description of the problem you're investigating (helps guide AI analysis)")
+	thinkingBudget := flag.Int("thinking-budget", 0, "Token budget for Claude 3.7 Sonnet's extended thinking mode (default: 0, disabled)")
 	interactive := flag.Bool("interactive", false, "Launch interactive TUI mode")
 	help := flag.Bool("help", false, "Show help information")
 
@@ -125,7 +126,7 @@ func main() {
 				os.Exit(1)
 			}
 		}
-		analyzeWithClaude(logs, apiKeyValue, *maxEntries, *problem)
+		analyzeWithClaude(logs, apiKeyValue, *maxEntries, *problem, *thinkingBudget)
 	} else if *analyze {
 		analyzeAndDisplayStats(logs, outputWriter)
 	} else if *jsonOutput {
@@ -153,6 +154,7 @@ func printUsage() {
 	fmt.Println("  --analyze                Analyze logs and show statistics")
 	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
 	fmt.Println("  --api-key <key>          Claude API key for AI analysis (or set CLAUDE_API_KEY env var)")
+	fmt.Println("  --thinking-budget <num>  Token budget for Claude 3.7 Sonnet's extended thinking mode (default: 0, disabled)")
 	fmt.Println("  --trim                   Remove entries with duplicate information")
 	fmt.Println("  --trim-json <path>       Write deduplicated logs to a JSON file at specified path")
 	fmt.Println("  --max-entries <num>      Maximum number of log entries to send to Claude AI (default: 100)")
@@ -168,6 +170,7 @@ func printUsage() {
 	fmt.Println("  mlp --file mattermost.log --analyze")
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
 	fmt.Println("  mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY")
+	fmt.Println("  mlp --file mattermost.log --ai-analyze --thinking-budget 16000")
 	fmt.Println("  mlp --file mattermost.log --trim --level error")
 	fmt.Println("  mlp --file mattermost.log --trim --trim-json deduped_logs.json")
 }
