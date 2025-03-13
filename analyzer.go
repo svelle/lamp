@@ -40,8 +40,21 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
 		return
 	}
 
+	// Count unique entries vs total entries with duplicates
+	uniqueEntries := len(logs)
+	totalEntries := 0
+	for _, log := range logs {
+		count := log.DuplicateCount
+		if count == 0 {
+			count = 1
+		}
+		totalEntries += count
+	}
+
+	isDeduplicated := totalEntries > uniqueEntries
+
 	analysis := analyzeLogs(logs)
-	displayAnalysis(analysis, writer)
+	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries)
 }
 
 // analyzeLogs performs analysis on log entries
@@ -166,7 +179,7 @@ func mapToSortedSlice(m map[string]int, limit int) []CountedItem {
 }
 
 // displayAnalysis prints the analysis results
-func displayAnalysis(analysis LogAnalysis, writer io.Writer) {
+func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool, uniqueEntries int) {
 	// ANSI color codes
 	headerColor := "\033[1;36m" // Bold Cyan
 	subHeaderColor := "\033[1;33m" // Bold Yellow
@@ -176,7 +189,14 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer) {
 	
 	// Basic statistics
 	fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
-	fmt.Fprintf(writer, "Total Log Entries: %d (including duplicates)\n", analysis.TotalEntries)
+	if isDeduplicated {
+		fmt.Fprintf(writer, "Unique Log Entries: %d\n", uniqueEntries)
+		fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n", 
+			analysis.TotalEntries, analysis.TotalEntries-uniqueEntries)
+		fmt.Fprintf(writer, "Deduplication Ratio: %.2f:1\n", float64(analysis.TotalEntries)/float64(uniqueEntries))
+	} else {
+		fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
+	}
 	fmt.Fprintf(writer, "Time Range: %s to %s\n", 
 		analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
 		analysis.TimeRange.End.Format("2006-01-02 15:04:05"))
