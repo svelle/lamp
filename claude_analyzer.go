@@ -81,12 +81,23 @@ func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemSt
 	// Format logs for Claude
 	var logText strings.Builder
 	for i, log := range logsToAnalyze {
-		logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s\n", 
-			i+1,
-			log.Timestamp.Format("2006-01-02 15:04:05"),
-			log.Level,
-			log.Source,
-			log.Message))
+		// Add count information for entries with duplicates
+		if log.DuplicateCount > 1 {
+			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s (repeated %d times)\n", 
+				i+1,
+				log.Timestamp.Format("2006-01-02 15:04:05"),
+				log.Level,
+				log.Source,
+				log.Message,
+				log.DuplicateCount))
+		} else {
+			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s\n", 
+				i+1,
+				log.Timestamp.Format("2006-01-02 15:04:05"),
+				log.Level,
+				log.Source,
+				log.Message))
+		}
 		
 		if log.User != "" {
 			logText.WriteString(fmt.Sprintf("   User: %s\n", log.User))
@@ -115,25 +126,59 @@ Focus on actionable insights and be specific about what you find.`
 	// Use a more concise prompt for Claude 3.7 Sonnet with thinking mode
 	if thinkingBudget > 0 {
 		systemPrompt = `You are an expert log analyzer for Mattermost server logs. Analyze these logs and identify issues, patterns, and solutions.`
+		
+		// Check if we have logs with duplicate counts
+		hasDuplicates := false
+		for _, log := range logsToAnalyze {
+			if log.DuplicateCount > 1 {
+				hasDuplicates = true
+				break
+			}
+		}
+		
+		// Add information about duplicates in the prompt
+		if hasDuplicates {
+			systemPrompt += ` Some log entries may be marked with repetition counts, indicating they appeared multiple times.`
+		}
 	}
 
 	// Create the user prompt
 	userPrompt := ""
+	
+	// Count total entries including duplicates
+	totalEntries := 0
+	hasDuplicates := false
+	for _, log := range logsToAnalyze {
+		if log.DuplicateCount > 1 {
+			hasDuplicates = true
+			totalEntries += log.DuplicateCount
+		} else {
+			totalEntries += 1
+		}
+	}
+	
+	// Create appropriate preface based on duplication
+	entryDescription := fmt.Sprintf("%d Mattermost server log entries", len(logsToAnalyze))
+	if hasDuplicates {
+		entryDescription = fmt.Sprintf("%d unique Mattermost server log entries representing %d total log entries", 
+			len(logsToAnalyze), totalEntries)
+	}
+	
 	if problemStatement != "" {
 		if thinkingBudget > 0 {
-			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %d Mattermost server log entries to analyze:\n\n%s", 
-				problemStatement, len(logsToAnalyze), logText.String())
+			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s", 
+				problemStatement, entryDescription, logText.String())
 		} else {
-			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.", 
-				problemStatement, len(logsToAnalyze), logText.String())
+			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.", 
+				problemStatement, entryDescription, logText.String())
 		}
 	} else {
 		if thinkingBudget > 0 {
-			userPrompt = fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s", 
-				len(logsToAnalyze), logText.String())
+			userPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s", 
+				entryDescription, logText.String())
 		} else {
-			userPrompt = fmt.Sprintf("Here are %d Mattermost server log entries to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
-				len(logsToAnalyze), logText.String())
+			userPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
+				entryDescription, logText.String())
 		}
 	}
 	

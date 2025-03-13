@@ -173,6 +173,7 @@ func printUsage() {
 	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
 	fmt.Println("  mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY")
 	fmt.Println("  mlp --file mattermost.log --ai-analyze --thinking-budget 3000")
+	fmt.Println("  mlp --file mattermost.log --trim --ai-analyze --show-dupes=false --thinking-budget 3000")
 	fmt.Println("  mlp --file mattermost.log --trim --level error")
 	fmt.Println("  mlp --file mattermost.log --trim --trim-json deduped_logs.json")
 }
