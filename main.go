@@ -42,6 +42,12 @@ var fileCmd = &cobra.Command{
 	Use:   "file [path]",
 	Short: "Parse a single Mattermost log file",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		filePath := args[0]
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
@@ -61,6 +67,12 @@ var supportPacketCmd = &cobra.Command{
 	Use:   "support-packet [path]",
 	Short: "Parse a Mattermost support packet zip file",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		packetPath := args[0]
 		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
@@ -77,6 +89,9 @@ var supportPacketCmd = &cobra.Command{
 }
 
 func init() {
+	// Enable command completion
+	rootCmd.CompletionOptions.DisableDefaultCmd = false
+
 	// Add subcommands to root command
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(supportPacketCmd)
@@ -102,6 +117,36 @@ func init() {
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
 		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
+
+		// Add custom completion for flags
+		cmd.RegisterFlagCompletionFunc("level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+		})
+
+		// Add file completion for flags that expect file paths
+		cmd.RegisterFlagCompletionFunc("csv", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveDefault
+		})
+		cmd.RegisterFlagCompletionFunc("output", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveDefault
+		})
+		cmd.RegisterFlagCompletionFunc("trim-json", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveDefault
+		})
+
+		// Add boolean flag completion
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "show-dupes", "interactive"} {
+			cmd.RegisterFlagCompletionFunc(flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+			})
+		}
+
+		// Add time format hint completion
+		for _, flag := range []string{"start", "end"} {
+			cmd.RegisterFlagCompletionFunc(flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				return []string{"2006-01-02T15:04:05"}, cobra.ShellCompDirectiveNoFileComp
+			})
+		}
 	}
 }
 
