@@ -50,7 +50,7 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 	for _, log := range logs {
 		// Format timestamp
 		timestamp := log.Timestamp.Format("2006-01-02 15:04:05")
-		
+
 		// Color the log level
 		var levelColored string
 		switch strings.ToUpper(log.Level) {
@@ -65,35 +65,35 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 		default:
 			levelColored = log.Level
 		}
-		
+
 		// Print the formatted log entry
-		fmt.Fprintf(writer, "%s [%s] %s%s%s\n", 
-			colorCyan + timestamp + colorReset,
+		fmt.Fprintf(writer, "%s [%s] %s%s%s\n",
+			colorCyan+timestamp+colorReset,
 			levelColored,
-			colorBold + log.Source + colorReset,
-			colorWhite + " → " + colorReset,
+			colorBold+log.Source+colorReset,
+			colorWhite+" → "+colorReset,
 			log.Message,
 		)
-		
+
 		// Print user if available
 		if log.User != "" {
 			fmt.Fprintf(writer, "  %sUser:%s %s\n", colorPurple, colorReset, log.User)
 		}
-		
-		// Print caller if available
-		if log.Caller != "" {
-			fmt.Fprintf(writer, "  %sCaller:%s %s\n", colorPurple, colorReset, log.Caller)
+
+		// Print source if available
+		if log.Source != "" {
+			fmt.Fprintf(writer, "  %sSource:%s %s\n", colorPurple, colorReset, log.Source)
 		}
-		
-		// Print details if available
-		if log.Details != "" {
-			fmt.Fprintf(writer, "  %sDetails:%s %s\n", colorPurple, colorReset, log.Details)
+
+		// Print extras if available
+		if len(log.Extras) > 0 {
+			fmt.Fprintf(writer, "  %sExtras:%s %s\n", colorPurple, colorReset, log.ExtrasToString())
 		}
-		
+
 		// Add a separator between entries
 		fmt.Fprintln(writer, strings.Repeat("-", 80))
 	}
-	
+
 	// Print summary
 	fmt.Fprintf(writer, "\nDisplayed %d log entries\n", len(logs))
 }
@@ -110,7 +110,7 @@ func displayLogsJSON(logs []LogEntry, writer io.Writer) {
 		fmt.Fprintf(writer, "Error formatting JSON: %v\n", err)
 		return
 	}
-	
+
 	fmt.Fprintln(writer, string(output))
 }
 
@@ -126,7 +126,7 @@ func exportToCSV(logs []LogEntry, filePath string) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Timestamp", "Level", "Source", "Message", "User", "Caller", "Details"}
+	header := []string{"Timestamp", "Level", "Source", "Message", "User", "Extras"}
 	if err := writer.Write(header); err != nil {
 		return err
 	}
@@ -139,8 +139,7 @@ func exportToCSV(logs []LogEntry, filePath string) error {
 			log.Source,
 			log.Message,
 			log.User,
-			log.Caller,
-			log.Details,
+			log.ExtrasToString(),
 		}
 		if err := writer.Write(row); err != nil {
 			return err
