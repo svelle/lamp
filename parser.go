@@ -196,15 +196,27 @@ func parseJSONLine(line string) (LogEntry, error) {
 	}
 
 	// Extract additional fields
-	var extra map[string]string
-	if err := json.Unmarshal([]byte(line), &extra); err == nil {
-		for k, v := range extra {
-			// Skip fields we already handle
-			if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
-				continue
-			}
+	var extra map[string]any
+	if err := json.Unmarshal([]byte(line), &extra); err != nil {
+		return entry, fmt.Errorf("failed to parse extra JSON fields: %v", err)
+	}
+	for k, v := range extra {
+		// Skip fields we already handle
+		if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
+			continue
+		}
 
-			entry.Extras[k] = v
+		// Convert non-string values to strings
+		switch val := v.(type) {
+		case string:
+			entry.Extras[k] = val
+		default:
+			// Use json.Marshal to convert other types to string representation
+			bytes, err := json.Marshal(val)
+			if err != nil {
+				return entry, fmt.Errorf("failed to marshal extra field %s: %v", k, err)
+			}
+			entry.Extras[k] = string(bytes)
 		}
 	}
 

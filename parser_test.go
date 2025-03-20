@@ -57,6 +57,31 @@ func TestParsePlainTextLogLine(t *testing.T) {
 			line:    "",
 			wantErr: true,
 		},
+		// TODO: Fix implementation to handle this case
+		// {
+		// 	name: "plain text log with license info",
+		// 	line: `info  [2025-03-20 11:02:02.785 +01:00] Set license caller="platform/license.go:392" id=K9fGlbHegqb5F4KjP3zaoNqZ4L issued_at="2024-10-15 13:39:48.515 +02:00" starts_at="2024-10-15 13:39:48.515 +02:00" expires_at="2026-10-15 06:00:00.000 +02:00" sku_name=Enterprise sku_short_name=enterprise is_trial=false is_gov_sku=false customer_id=p9un369a67ksmj4yd6i6ib39wh features.users=200000 features=mfa=true,message_export=true,guest_accounts_permissions=true,elastic_search=true,id_loaded=true,office365=true,compliance=true,email_notification_contents=true,cloud=false,shared_channels=true,saml=true,enterprise_plugins=true,future=true,metrics=true,mhpns=true,data_retention=true,guest_accounts=true,outgoing_oauth_connections=true,lock_teammate_name_display=true,advanced_logging=true,google=true,openid=true,custom_permissions_schemes=true,ldap=true,ldap_groups=true,cluster=true,remote_cluster_service=true`,
+		// 	want: LogEntry{
+		// 		Timestamp: mustParseTime(t, "2025-03-20 10:02:02.785 Z"),
+		// 		Level:     "info",
+		// 		Message:   "Set license",
+		// 		Source:    "platform/license.go:392",
+		// 		Extras: map[string]string{
+		// 			"id":             "K9fGlbHegqb5F4KjP3zaoNqZ4L",
+		// 			"issued_at":      "2024-10-15 13:39:48.515 +02:00",
+		// 			"starts_at":      "2024-10-15 13:39:48.515 +02:00",
+		// 			"expires_at":     "2026-10-15 06:00:00.000 +02:00",
+		// 			"sku_name":       "Enterprise",
+		// 			"sku_short_name": "enterprise",
+		// 			"is_trial":       "false",
+		// 			"is_gov_sku":     "false",
+		// 			"customer_id":    "p9un369a67ksmj4yd6i6ib39wh",
+		// 			"features.users": "200000",
+		// 			"features":       "mfa=true,message_export=true,guest_accounts_permissions=true,elastic_search=true,id_loaded=true,office365=true,compliance=true,email_notification_contents=true,cloud=false,shared_channels=true,saml=true,enterprise_plugins=true,future=true,metrics=true,mhpns=true,data_retention=true,guest_accounts=true,outgoing_oauth_connections=true,lock_teammate_name_display=true,advanced_logging=true,google=true,openid=true,custom_permissions_schemes=true,ldap=true,ldap_groups=true,cluster=true,remote_cluster_service=true",
+		// 		},
+		// 	},
+		// 	wantErr: false,
+		// },
 	}
 
 	for _, tt := range tests {
@@ -112,6 +137,30 @@ func TestParseJSONLine(t *testing.T) {
 					"request_id":  "XYZ789",
 					"status_code": "200",
 					"err":         "some error",
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name:  "complex JSON with license info",
+			input: `{"timestamp":"2025-02-19 13:00:19.541 +01:00","level":"info","msg":"Set license","caller":"platform/license.go:392","id":"ntisr7wfwbghpyakh87fazbqma","issued_at":"2023-03-06 18:51:19.000 +01:00","starts_at":"2023-03-06 18:51:19.000 +01:00","expires_at":"2025-03-06 18:51:19.000 +01:00","sku_name":"Enterprise Dev","sku_short_name":"enterprise","is_trial":false,"is_gov_sku":false,"customer_id":"p9un369a67gimj4yd6i6ib39wh","features.users":200000,"features":{"advanced_logging":true,"cloud":false,"cluster":true,"compliance":true,"custom_permissions_schemes":true,"data_retention":true,"elastic_search":true,"email_notification_contents":true,"enterprise_plugins":true,"future":true,"google":true,"guest_accounts":true,"guest_accounts_permissions":true,"id_loaded":true,"ldap":true,"ldap_groups":true,"lock_teammate_name_display":true,"message_export":true,"metrics":true,"mfa":true,"mhpns":true,"office365":true,"openid":true,"outgoing_oauth_connections":true,"remote_cluster_service":true,"saml":true,"shared_channels":true}}`,
+			want: LogEntry{
+				Timestamp: mustParseTime(t, "2025-02-19 12:00:19.541 Z"), // Adjusted for UTC
+				Level:     "info",
+				Message:   "Set license",
+				Source:    "platform/license.go:392",
+				Extras: map[string]string{
+					"id":             "ntisr7wfwbghpyakh87fazbqma",
+					"issued_at":      "2023-03-06 18:51:19.000 +01:00",
+					"starts_at":      "2023-03-06 18:51:19.000 +01:00",
+					"expires_at":     "2025-03-06 18:51:19.000 +01:00",
+					"sku_name":       "Enterprise Dev",
+					"sku_short_name": "enterprise",
+					"is_trial":       "false",
+					"is_gov_sku":     "false",
+					"customer_id":    "p9un369a67gimj4yd6i6ib39wh",
+					"features.users": "200000",
+					"features":       `{"advanced_logging":true,"cloud":false,"cluster":true,"compliance":true,"custom_permissions_schemes":true,"data_retention":true,"elastic_search":true,"email_notification_contents":true,"enterprise_plugins":true,"future":true,"google":true,"guest_accounts":true,"guest_accounts_permissions":true,"id_loaded":true,"ldap":true,"ldap_groups":true,"lock_teammate_name_display":true,"message_export":true,"metrics":true,"mfa":true,"mhpns":true,"office365":true,"openid":true,"outgoing_oauth_connections":true,"remote_cluster_service":true,"saml":true,"shared_channels":true}`,
 				},
 			},
 			wantErr: false,
