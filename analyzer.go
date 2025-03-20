@@ -263,7 +263,14 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 	hourMap := make(map[int]int)
 	for _, hour := range analysis.BusiestHours {
 		hourNum := 0
-		fmt.Sscanf(hour.Item, "%d", &hourNum)
+		if _, err := fmt.Sscanf(hour.Item, "%d", &hourNum); err != nil {
+			// Skip invalid hour entries
+			continue
+		}
+		if hourNum < 0 || hourNum >= 24 {
+			// Skip hours outside valid range
+			continue
+		}
 		hourMap[hourNum] = hour.Count
 	}
 
