@@ -7,7 +7,7 @@ on:
 
 env:
   GO_VERSION: '1.23'
-  GOLANGCI_LINT_VERSION: v1.57.1
+  GOLANGCI_LINT_VERSION: 'v1.64.7'
 
 jobs:
   test:
@@ -44,4 +44,4 @@ jobs:
         version: ${{ env.GOLANGCI_LINT_VERSION }}
 
     - name: Run golangci-lint
-      run: golangci-lint run --timeout=5m 
+      run: golangci-lint run --timeout=5m
