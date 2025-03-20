@@ -2,7 +2,7 @@ module github.com/yourusername/mlp
 
 go 1.23
 
-toolchain go1.23
+toolchain go1.23.7
 
 require (
 	github.com/gdamore/tcell/v2 v2.7.1
