@@ -135,7 +135,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "show-dupes", "interactive"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive"} {
 			cmd.RegisterFlagCompletionFunc(flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
