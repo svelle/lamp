@@ -92,8 +92,8 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 		}
 
 		// Print extras if available
-		if len(log.Extras) > 0 {
-			fmt.Fprintf(writer, "  %sExtras:%s %s\n", colorPurple, colorReset, log.ExtrasToString())
+		for key, value := range log.Extras {
+			fmt.Fprintf(writer, "  %s%s:%s %s\n", colorPurple, key, colorReset, value)
 		}
 
 		// Add a separator between entries

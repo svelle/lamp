@@ -26,7 +26,6 @@ type LogEntry struct {
 // ExtrasToString converts the Extras map to a comma-separated string of key-value pairs.
 // Each pair is formatted as "key=value". The pairs are sorted alphabetically by key.
 // Returns an empty string if Extras is nil or empty.
-
 func (l *LogEntry) ExtrasToString() string {
 	extras := []string{}
 	for k, v := range l.Extras {
