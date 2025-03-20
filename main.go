@@ -1,179 +1,233 @@
 package main
 
 import (
-	"flag"
 	"fmt"
-	"io"
 	"os"
+
+	"github.com/spf13/cobra"
 )
 
-// mattermost-log-parser (mlp) is a tool for parsing and analyzing Mattermost log files
-func main() {
-	// Define command line flags
-	filePath := flag.String("file", "", "Path to the Mattermost log file")
-	supportPacket := flag.String("support-packet", "", "Path to a Mattermost support packet zip file")
-	searchTerm := flag.String("search", "", "Search term to filter logs")
-	regexSearch := flag.String("regex", "", "Regular expression pattern to filter logs")
-	levelFilter := flag.String("level", "", "Filter logs by level (info, error, debug, etc.)")
-	userFilter := flag.String("user", "", "Filter logs by username")
-	startTime := flag.String("start", "", "Filter logs after this time (format: 2006-01-02T15:04:05)")
-	endTime := flag.String("end", "", "Filter logs before this time (format: 2006-01-02T15:04:05)")
-	jsonOutput := flag.Bool("json", false, "Output in JSON format")
-	csvOutput := flag.String("csv", "", "Output logs to CSV file at specified path")
-	outputFile := flag.String("output", "", "Save output to file instead of stdout")
-	analyze := flag.Bool("analyze", false, "Analyze logs and show statistics")
-	aiAnalyze := flag.Bool("ai-analyze", false, "Analyze logs using Claude AI")
-	apiKey := flag.String("api-key", "", "Claude API key for AI analysis")
-	trim := flag.Bool("trim", false, "Remove entries with duplicate information")
-	showDupes := flag.Bool("show-dupes", true, "Show duplicate count information in analysis")
-	trimJSON := flag.String("trim-json", "", "Write deduplicated logs to a JSON file at specified path")
-	maxEntries := flag.Int("max-entries", 100, "Maximum number of log entries to send to Claude AI")
-	problem := flag.String("problem", "", "Description of the problem you're investigating (helps guide AI analysis)")
-	thinkingBudget := flag.Int("thinking-budget", 0, "Token budget for Claude 3.7 Sonnet's extended thinking mode (default: 0, disabled)")
-	interactive := flag.Bool("interactive", false, "Launch interactive TUI mode")
-	help := flag.Bool("help", false, "Show help information")
+var (
+	// Global flags
+	searchTerm     string
+	regexSearch    string
+	levelFilter    string
+	userFilter     string
+	startTime      string
+	endTime        string
+	jsonOutput     bool
+	csvOutput      string
+	outputFile     string
+	analyze        bool
+	aiAnalyze      bool
+	apiKey         string
+	trim           bool
+	trimJSON       string
+	maxEntries     int
+	problem        string
+	thinkingBudget int
+	interactive    bool
+)
 
-	// Parse command line arguments
-	flag.Parse()
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &cobra.Command{
+	Use:   "mlp",
+	Short: "Mattermost Log Parser (mlp) is a tool for parsing and analyzing Mattermost log files",
+	Long: `Mattermost Log Parser (mlp) allows you to parse, filter, and analyze Mattermost log files
+and support packets. It provides various filtering options, analysis capabilities,
+and AI-powered insights using Claude AI.`,
+}
 
-	// Show help information if requested or no files provided
-	if *help || (*filePath == "" && *supportPacket == "") {
-		printUsage()
-		return
-	}
-
-	var logs []LogEntry
-	var err error
-
-	if *supportPacket != "" {
-		// Process support packet
-		if _, err := os.Stat(*supportPacket); os.IsNotExist(err) {
-			fmt.Printf("Error: Support packet '%s' does not exist\n", *supportPacket)
-			os.Exit(1)
+var fileCmd = &cobra.Command{
+	Use:   "file [path]",
+	Short: "Parse a single Mattermost log file",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		logs, err = parseSupportPacket(*supportPacket, *searchTerm, *regexSearch, *levelFilter, *userFilter, *startTime, *endTime)
-	} else {
-		// Process single log file
-		if _, err := os.Stat(*filePath); os.IsNotExist(err) {
-			fmt.Printf("Error: File '%s' does not exist\n", *filePath)
-			os.Exit(1)
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return fmt.Errorf("file '%s' does not exist", filePath)
 		}
-		logs, err = parseLogFile(*filePath, *searchTerm, *regexSearch, *levelFilter, *userFilter, *startTime, *endTime)
-	}
-	if err != nil {
-		fmt.Printf("Error parsing log file: %v\n", err)
-		os.Exit(1)
-	}
-	
-	// Apply trim if requested
-	if *trim {
-		fmt.Printf("Starting deduplication of %d log entries...\n", len(logs))
-		originalCount := len(logs)
-		logs = trimDuplicateLogInfo(logs)
-		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n", 
-			originalCount, len(logs), originalCount-len(logs))
-		
-		// Write deduplicated logs to JSON file if requested
-		if *trimJSON != "" {
-			if err := writeLogsToJSON(logs, *trimJSON); err != nil {
-				fmt.Printf("Error writing deduplicated logs to JSON: %v\n", err)
-				os.Exit(1)
-			}
-			fmt.Printf("Deduplicated logs written to JSON file: %s\n", *trimJSON)
-		}
-	}
 
-	// Redirect output if requested
-	var outputWriter io.Writer = os.Stdout
-	if *outputFile != "" {
-		file, err := os.Create(*outputFile)
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
 		if err != nil {
-			fmt.Printf("Error creating output file: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error parsing log file: %v", err)
 		}
-		defer file.Close()
-		outputWriter = file
-		fmt.Printf("Writing output to %s\n", *outputFile)
-	}
 
-	// Handle interactive mode
-	if *interactive {
-		if err := launchInteractiveMode(logs); err != nil {
-			fmt.Printf("Error in interactive mode: %v\n", err)
-			os.Exit(1)
-		}
-		return
-	}
+		return processLogs(logs)
+	},
+}
 
-	// Export to CSV if requested
-	if *csvOutput != "" {
-		if err := exportToCSV(logs, *csvOutput); err != nil {
-			fmt.Printf("Error exporting to CSV: %v\n", err)
-			os.Exit(1)
+var supportPacketCmd = &cobra.Command{
+	Use:   "support-packet [path]",
+	Short: "Parse a Mattermost support packet zip file",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		fmt.Printf("Logs exported to CSV file: %s\n", *csvOutput)
-		return
-	}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		packetPath := args[0]
+		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
+			return fmt.Errorf("support packet '%s' does not exist", packetPath)
+		}
 
-	// Display logs in the requested format
-	if *aiAnalyze {
-		// Get API key from flag or environment variable
-		apiKeyValue := *apiKey
-		if apiKeyValue == "" {
-			apiKeyValue = os.Getenv("CLAUDE_API_KEY")
-			if apiKeyValue == "" {
-				fmt.Println("Error: Claude API key is required for AI analysis.")
-				fmt.Println("Provide it using --api-key flag or set the CLAUDE_API_KEY environment variable.")
-				os.Exit(1)
-			}
+		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			return fmt.Errorf("error parsing support packet: %v", err)
 		}
-		analyzeWithClaude(logs, apiKeyValue, *maxEntries, *problem, *thinkingBudget)
-	} else if *analyze {
-		analyzeAndDisplayStats(logs, outputWriter, *showDupes)
-	} else if *jsonOutput {
-		displayLogsJSON(logs, outputWriter)
-	} else {
-		displayLogsPretty(logs, outputWriter)
+
+		return processLogs(logs)
+	},
+}
+
+// registerFlagCompletion is a helper function that registers flag completion and panics on error
+func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)) {
+	if err := cmd.RegisterFlagCompletionFunc(flag, completionFunc); err != nil {
+		panic(fmt.Sprintf("failed to register completion for --%s flag: %v", flag, err))
 	}
 }
 
-func printUsage() {
-	fmt.Println("Mattermost Log Parser (mlp)")
-	fmt.Println("Usage: ./mlp --file <path> [options] OR ./mlp --support-packet <path> [options]")
-	fmt.Println("\nOptions:")
-	fmt.Println("  --file <path>            Path to the Mattermost log file")
-	fmt.Println("  --support-packet <path>  Path to a Mattermost support packet zip file")
-	fmt.Println("  --search <term>          Search term to filter logs")
-	fmt.Println("  --regex <pattern>        Regular expression pattern to filter logs")
-	fmt.Println("  --level <level>          Filter logs by level (info, error, debug, etc.)")
-	fmt.Println("  --user <username>        Filter logs by username")
-	fmt.Println("  --start <time>           Filter logs after this time (format: 2006-01-02T15:04:05)")
-	fmt.Println("  --end <time>             Filter logs before this time (format: 2006-01-02T15:04:05)")
-	fmt.Println("  --json                   Output in JSON format")
-	fmt.Println("  --csv <path>             Export logs to CSV file at specified path")
-	fmt.Println("  --output <path>          Save output to file instead of stdout")
-	fmt.Println("  --analyze                Analyze logs and show statistics")
-	fmt.Println("  --ai-analyze             Analyze logs using Claude AI")
-	fmt.Println("  --api-key <key>          Claude API key for AI analysis (or set CLAUDE_API_KEY env var)")
-	fmt.Println("  --thinking-budget <num>  Token budget for Claude 3.7 Sonnet's extended thinking mode (default: 0, disabled, recommended: 2000-3000)")
-	fmt.Println("  --trim                   Remove entries with duplicate information")
-	fmt.Println("  --show-dupes             Show duplicate count information in analysis (default: true)")
-	fmt.Println("  --trim-json <path>       Write deduplicated logs to a JSON file at specified path")
-	fmt.Println("  --max-entries <num>      Maximum number of log entries to send to Claude AI (default: 100)")
-	fmt.Println("  --problem \"<description>\" Description of the problem you're investigating (helps guide AI analysis)")
-	fmt.Println("  --interactive            Launch interactive TUI mode for exploring logs")
-	fmt.Println("  --help                   Show this help information")
-	fmt.Println("\nExamples:")
-	fmt.Println("  mlp --file mattermost.log")
-	fmt.Println("  mlp --file mattermost.log --search \"error\"")
-	fmt.Println("  mlp --file mattermost.log --level error --user admin")
-	fmt.Println("  mlp --support-packet mattermost_support_packet.zip")
-	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --level error")
-	fmt.Println("  mlp --file mattermost.log --analyze")
-	fmt.Println("  mlp --support-packet mattermost_support_packet.zip --analyze")
-	fmt.Println("  mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY")
-	fmt.Println("  mlp --file mattermost.log --ai-analyze --thinking-budget 3000")
-	fmt.Println("  mlp --file mattermost.log --trim --ai-analyze --show-dupes=false --thinking-budget 3000")
-	fmt.Println("  mlp --file mattermost.log --trim --level error")
-	fmt.Println("  mlp --file mattermost.log --trim --trim-json deduped_logs.json")
+func init() {
+	// Enable command completion
+	rootCmd.CompletionOptions.DisableDefaultCmd = false
+
+	// Add subcommands to root command
+	rootCmd.AddCommand(fileCmd)
+	rootCmd.AddCommand(supportPacketCmd)
+
+	// Add shared flags to both subcommands
+	commands := []*cobra.Command{fileCmd, supportPacketCmd}
+	for _, cmd := range commands {
+		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
+		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
+		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
+		cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
+		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02T15:04:05)")
+		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02T15:04:05)")
+		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+		cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
+		cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
+		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
+		cmd.Flags().BoolVar(&aiAnalyze, "ai-analyze", false, "Analyze logs using Claude AI")
+		cmd.Flags().StringVar(&apiKey, "api-key", "", "Claude API key for AI analysis")
+		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
+		cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
+		cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to Claude AI")
+		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
+		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
+		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
+
+		// Add custom completion for flags
+		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+		})
+
+		// Add file completion for flags that expect file paths
+		registerFlagCompletion(cmd, "csv", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveDefault
+		})
+
+		registerFlagCompletion(cmd, "output", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveDefault
+		})
+
+		registerFlagCompletion(cmd, "trim-json", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveDefault
+		})
+
+		// Add boolean flag completion
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive"} {
+			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+			})
+		}
+
+		// Add time format hint completion
+		for _, flag := range []string{"start", "end"} {
+			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				return []string{"2006-01-02T15:04:05"}, cobra.ShellCompDirectiveNoFileComp
+			})
+		}
+	}
+}
+
+func main() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
+
+// processLogs handles the common log processing logic
+func processLogs(logs []LogEntry) error {
+	// Apply trim if requested
+	if trim {
+		fmt.Printf("Starting deduplication of %d log entries...\n", len(logs))
+		originalCount := len(logs)
+		logs = trimDuplicateLogInfo(logs)
+		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n",
+			originalCount, len(logs), originalCount-len(logs))
+
+		if trimJSON != "" {
+			if err := writeLogsToJSON(logs, trimJSON); err != nil {
+				return fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
+			}
+			fmt.Printf("Deduplicated logs written to JSON file: %s\n", trimJSON)
+		}
+	}
+
+	// Set output destination
+	output := os.Stdout
+	if outputFile != "" {
+		file, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("error creating output file: %v", err)
+		}
+		defer file.Close()
+		output = file
+		fmt.Printf("Writing output to %s\n", outputFile)
+	}
+
+	// Handle interactive mode
+	if interactive {
+		return launchInteractiveMode(logs)
+	}
+
+	// Export to CSV if requested
+	if csvOutput != "" {
+		if err := exportToCSV(logs, csvOutput); err != nil {
+			return fmt.Errorf("error exporting to CSV: %v", err)
+		}
+		fmt.Printf("Logs exported to CSV file: %s\n", csvOutput)
+		return nil
+	}
+
+	// Display logs in the requested format
+	switch {
+	case aiAnalyze:
+		apiKeyValue := apiKey
+		if apiKeyValue == "" {
+			apiKeyValue = os.Getenv("CLAUDE_API_KEY")
+			if apiKeyValue == "" {
+				return fmt.Errorf("Claude API key is required for AI analysis")
+			}
+		}
+		analyzeWithClaude(logs, apiKeyValue, maxEntries, problem, thinkingBudget)
+	case analyze:
+		analyzeAndDisplayStats(logs, output, !trim)
+	case jsonOutput:
+		displayLogsJSON(logs, output)
+	default:
+		displayLogsPretty(logs, output)
+	}
+
+	return nil
 }

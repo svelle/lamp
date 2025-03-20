@@ -35,20 +35,20 @@ A command-line tool for parsing, filtering, and displaying Mattermost log files 
 
 ## Usage
 
-```
-mlp --file <path> [options]
+Basic command structure:
+```bash
+mlp <command> [flags]
 ```
 
-or
+### Commands
 
-```
-mlp --support-packet <path> [options]
-```
+- `file <path>`: Parse a single Mattermost log file
+- `support-packet <path>`: Parse a Mattermost support packet zip file
+- `completion`: Generate shell completion scripts
+- `help`: Help about any command
 
 ### Options
 
-- `--file <path>`: Path to the Mattermost log file
-- `--support-packet <path>`: Path to a Mattermost support packet zip file
 - `--search <term>`: Search term to filter logs
 - `--regex <pattern>`: Regular expression pattern to filter logs
 - `--level <level>`: Filter logs by level (info, error, debug, etc.)
@@ -64,104 +64,110 @@ mlp --support-packet <path> [options]
 - `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
 - `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
 - `--interactive`: Launch interactive TUI mode for exploring logs
-- `--help`: Show help information
+- `--help`: Show help information for any command
+
+### Shell Completion
+
+The tool supports shell completion for commands, flags, and arguments. To enable completion:
+
+```bash
+# For bash
+mlp completion bash > /etc/bash_completion.d/mlp
+
+# For zsh
+mlp completion zsh > "${fpath[1]}/_mlp"
+
+# For fish
+mlp completion fish > ~/.config/fish/completions/mlp.fish
+```
+
+After enabling completion, you can use:
+- Tab completion for commands: `mlp [tab]`
+- Tab completion for log files: `mlp file [tab]`
+- Tab completion for flag values: `mlp file log.txt --level [tab]`
+- File path completion for relevant flags: `mlp file log.txt --output [tab]`
 
 ### Examples
 
-Display all logs from a file:
+Parse a single log file:
 ```bash
-mlp --file mattermost.log
+mlp file mattermost.log
+```
+
+Parse a support packet:
+```bash
+mlp support-packet mattermost_support_packet.zip
 ```
 
 Filter logs containing the word "error":
 ```bash
-mlp --file mattermost.log --search "error"
+mlp file mattermost.log --search "error"
 ```
 
 Show only error-level logs:
 ```bash
-mlp --file mattermost.log --level error
+mlp file mattermost.log --level error
 ```
 
 Filter logs by user and output as JSON:
 ```bash
-mlp --file mattermost.log --user admin --json
+mlp file mattermost.log --user admin --json
 ```
 
 Combine multiple filters:
 ```bash
-mlp --file mattermost.log --level error --search "database"
-```
-
-Parse logs from a Mattermost support packet:
-```bash
-mlp --support-packet mattermost_support_packet.zip
-```
-
-Filter logs from a support packet:
-```bash
-mlp --support-packet mattermost_support_packet.zip --level error
-```
-
-Analyze logs and show statistics:
-```bash
-mlp --file mattermost.log --analyze
-```
-
-Analyze logs from a support packet:
-```bash
-mlp --support-packet mattermost_support_packet.zip --analyze
+mlp file mattermost.log --level error --search "database"
 ```
 
 Filter logs by time range:
 ```bash
-mlp --file mattermost.log --start 2023-01-01T00:00:00 --end 2023-01-02T00:00:00
+mlp file mattermost.log --start 2023-01-01T00:00:00 --end 2023-01-02T00:00:00
 ```
 
 Use regular expressions for advanced filtering:
 ```bash
-mlp --file mattermost.log --regex "error.*database"
+mlp file mattermost.log --regex "error.*database"
 ```
 
 Export logs to CSV for spreadsheet analysis:
 ```bash
-mlp --file mattermost.log --csv logs_export.csv
+mlp file mattermost.log --csv logs_export.csv
 ```
 
 Save output to a file:
 ```bash
-mlp --file mattermost.log --analyze --output analysis_report.txt
+mlp file mattermost.log --analyze --output analysis_report.txt
 ```
 
 Launch interactive TUI mode for exploring logs:
 ```bash
-mlp --file mattermost.log --interactive
+mlp file mattermost.log --interactive
 ```
 
 Analyze logs using Claude AI:
 ```bash
 # Using command line flag
-mlp --file mattermost.log --ai-analyze --api-key YOUR_API_KEY
+mlp file mattermost.log --ai-analyze --api-key YOUR_API_KEY
 
 # Using environment variable
 export CLAUDE_API_KEY=YOUR_API_KEY
-mlp --file mattermost.log --ai-analyze
+mlp file mattermost.log --ai-analyze
 
 # Specify maximum number of log entries to analyze
-mlp --file mattermost.log --ai-analyze --max-entries 200
+mlp file mattermost.log --ai-analyze --max-entries 200
 
 # Provide a problem statement to guide the analysis
-mlp --file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
+mlp file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
 ```
 
 Analyze support packet logs using Claude AI:
 ```bash
 # Using command line flag
-mlp --support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
+mlp support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
 
 # Using environment variable
 export CLAUDE_API_KEY=YOUR_API_KEY
-mlp --support-packet mattermost_support_packet.zip --ai-analyze
+mlp support-packet mattermost_support_packet.zip --ai-analyze
 ```
 
 ## Output Format
