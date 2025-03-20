@@ -34,17 +34,6 @@ func (l *LogEntry) ExtrasToString() string {
 	return strings.Join(extras, ", ")
 }
 
-// JSONLogEntry represents a JSON-formatted log entry
-type JSONLogEntry struct {
-	Timestamp string         `json:"timestamp"`
-	Level     string         `json:"level"`
-	Msg       string         `json:"msg"`
-	Caller    string         `json:"caller,omitempty"`
-	UserID    string         `json:"user_id,omitempty"`
-	Error     string         `json:"error,omitempty"`
-	Extra     map[string]any `json:"-"`
-}
-
 // parseLogFile reads and parses a Mattermost log file, applying filters
 func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
@@ -186,6 +175,15 @@ func parseLine(line string) (LogEntry, error) {
 func parseJSONLine(line string) (LogEntry, error) {
 	var entry LogEntry
 	entry.Extras = make(map[string]string)
+
+	// JSONLogEntry represents a JSON-formatted log entry
+	type JSONLogEntry struct {
+		Timestamp string `json:"timestamp"`
+		Level     string `json:"level"`
+		Msg       string `json:"msg"`
+		Caller    string `json:"caller,omitempty"`
+		UserID    string `json:"user_id,omitempty"`
+	}
 	var jsonEntry JSONLogEntry
 
 	// Unmarshal the JSON log entry
@@ -211,20 +209,11 @@ func parseJSONLine(line string) (LogEntry, error) {
 	}
 
 	// Parse timestamp
-	timestamp, err := parseTimestamp(jsonEntry.Timestamp)
+	timestamp, err := parseTimestamp(strings.TrimSpace(jsonEntry.Timestamp))
 	if err != nil {
-		// If parsing failed with the standard format, try to fix common timestamp issues
-		fixedTimestamp := strings.TrimSpace(jsonEntry.Timestamp)
-		timestamp, err = parseTimestamp(fixedTimestamp)
-		if err != nil {
-			// Continue with a default timestamp rather than failing completely
-			entry.Timestamp = time.Now()
-		} else {
-			entry.Timestamp = timestamp
-		}
-	} else {
-		entry.Timestamp = timestamp
+		return entry, err
 	}
+	entry.Timestamp = timestamp
 
 	// Set other fields
 	entry.Level = jsonEntry.Level
@@ -524,22 +513,6 @@ func levenshteinDistance(s1, s2 string) int {
 	}
 
 	return v1[len(s2)]
-}
-
-// min returns the smallest of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// max returns the largest of two integers
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }
 
 // shouldIncludeEntry checks if a log entry matches all the specified filters
