@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	claudeAPIURL = "https://api.anthropic.com/v1/messages"
+	claudeAPIURL         = "https://api.anthropic.com/v1/messages"
 	defaultMaxLogEntries = 100 // Default limit for logs to send to Claude
 )
 
@@ -61,29 +61,29 @@ type ClaudeError struct {
 // analyzeWithClaude sends log data to Claude API for analysis
 func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemStatement string, thinkingBudget int) {
 	fmt.Println("Analyzing logs with Claude Sonnet API...")
-	
+
 	// If maxEntries is not set (0), use the default
 	if maxEntries <= 0 {
 		maxEntries = defaultMaxLogEntries
 	}
-	
+
 	// Prepare logs for Claude
 	logsToAnalyze := logs
 	if len(logs) > maxEntries {
-		fmt.Printf("Limiting analysis to %d most recent log entries (out of %d total)\n", 
+		fmt.Printf("Limiting analysis to %d most recent log entries (out of %d total)\n",
 			maxEntries, len(logs))
 		// Sort logs by timestamp (most recent first)
-		// This is a simple approach - in a real implementation, you might want to 
+		// This is a simple approach - in a real implementation, you might want to
 		// use a more sophisticated selection strategy
 		logsToAnalyze = logs[len(logs)-maxEntries:]
 	}
-	
+
 	// Format logs for Claude
 	var logText strings.Builder
 	for i, log := range logsToAnalyze {
 		// Add count information for entries with duplicates
 		if log.DuplicateCount > 1 {
-			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s (repeated %d times)\n", 
+			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s (repeated %d times)\n",
 				i+1,
 				log.Timestamp.Format("2006-01-02 15:04:05"),
 				log.Level,
@@ -91,26 +91,26 @@ func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemSt
 				log.Message,
 				log.DuplicateCount))
 		} else {
-			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s\n", 
+			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s\n",
 				i+1,
 				log.Timestamp.Format("2006-01-02 15:04:05"),
 				log.Level,
 				log.Source,
 				log.Message))
 		}
-		
+
 		if log.User != "" {
 			logText.WriteString(fmt.Sprintf("   User: %s\n", log.User))
 		}
-		if log.Caller != "" {
-			logText.WriteString(fmt.Sprintf("   Caller: %s\n", log.Caller))
+		if log.Source != "" {
+			logText.WriteString(fmt.Sprintf("   Source: %s\n", log.Source))
 		}
-		if log.Details != "" {
-			logText.WriteString(fmt.Sprintf("   Details: %s\n", log.Details))
+		if len(log.Extras) > 0 {
+			logText.WriteString(fmt.Sprintf("   Extras: %s\n", log.ExtrasToString()))
 		}
 		logText.WriteString("\n")
 	}
-	
+
 	// Create the system prompt
 	systemPrompt := `You are an expert log analyzer for Mattermost server logs. 
 Analyze the provided logs and provide a comprehensive report including:
@@ -126,7 +126,7 @@ Focus on actionable insights and be specific about what you find.`
 	// Use a more concise prompt for Claude 3.7 Sonnet with thinking mode
 	if thinkingBudget > 0 {
 		systemPrompt = `You are an expert log analyzer for Mattermost server logs. Analyze these logs and identify issues, patterns, and solutions.`
-		
+
 		// Check if we have logs with duplicate counts
 		hasDuplicates := false
 		for _, log := range logsToAnalyze {
@@ -135,7 +135,7 @@ Focus on actionable insights and be specific about what you find.`
 				break
 			}
 		}
-		
+
 		// Add information about duplicates in the prompt
 		if hasDuplicates {
 			systemPrompt += ` Some log entries may be marked with repetition counts, indicating they appeared multiple times.`
@@ -144,7 +144,7 @@ Focus on actionable insights and be specific about what you find.`
 
 	// Create the user prompt
 	userPrompt := ""
-	
+
 	// Count total entries including duplicates
 	totalEntries := 0
 	hasDuplicates := false
@@ -156,32 +156,32 @@ Focus on actionable insights and be specific about what you find.`
 			totalEntries += 1
 		}
 	}
-	
+
 	// Create appropriate preface based on duplication
 	entryDescription := fmt.Sprintf("%d Mattermost server log entries", len(logsToAnalyze))
 	if hasDuplicates {
-		entryDescription = fmt.Sprintf("%d unique Mattermost server log entries representing %d total log entries", 
+		entryDescription = fmt.Sprintf("%d unique Mattermost server log entries representing %d total log entries",
 			len(logsToAnalyze), totalEntries)
 	}
-	
+
 	if problemStatement != "" {
 		if thinkingBudget > 0 {
-			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s", 
+			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s",
 				problemStatement, entryDescription, logText.String())
 		} else {
-			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.", 
+			userPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.",
 				problemStatement, entryDescription, logText.String())
 		}
 	} else {
 		if thinkingBudget > 0 {
-			userPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s", 
+			userPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s",
 				entryDescription, logText.String())
 		} else {
-			userPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.", 
+			userPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.",
 				entryDescription, logText.String())
 		}
 	}
-	
+
 	// Create the request
 	request := ClaudeRequest{
 		Model:     "claude-3-5-haiku-latest",
@@ -195,50 +195,50 @@ Focus on actionable insights and be specific about what you find.`
 		System:      systemPrompt,
 		Temperature: 0.3,
 	}
-	
+
 	// Enable thinking mode if thinkingBudget is set
 	if thinkingBudget > 0 {
 		request.Model = "claude-3-7-sonnet-latest"
-		
+
 		// Ensure max_tokens is larger than thinking budget (Claude requirement)
-		responseTokens := 4000  // Default tokens for actual response
+		responseTokens := 4000 // Default tokens for actual response
 		request.MaxTokens = thinkingBudget + responseTokens
-		
+
 		// Set temperature to 1 when thinking is enabled (Claude requirement)
 		request.Temperature = 1.0
-		
+
 		request.Thinking = &ThinkingConfig{
 			Type:         "enabled",
 			BudgetTokens: thinkingBudget,
 		}
-		fmt.Printf("Extended thinking mode enabled with %d tokens budget (total max tokens: %d)\n", 
+		fmt.Printf("Extended thinking mode enabled with %d tokens budget (total max tokens: %d)\n",
 			thinkingBudget, request.MaxTokens)
 	}
-	
+
 	// Convert request to JSON
 	requestJSON, err := json.Marshal(request)
 	if err != nil {
 		fmt.Printf("Error creating request: %v\n", err)
 		return
 	}
-	
+
 	// Create HTTP request
 	req, err := http.NewRequest("POST", claudeAPIURL, bytes.NewBuffer(requestJSON))
 	if err != nil {
 		fmt.Printf("Error creating HTTP request: %v\n", err)
 		return
 	}
-	
+
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-api-key", apiKey)
 	req.Header.Set("anthropic-version", "2023-06-01")
-	
+
 	// Create HTTP client with timeout
 	client := &http.Client{
 		Timeout: 60 * time.Second,
 	}
-	
+
 	// Send request
 	fmt.Println("Sending request to Claude API...")
 	resp, err := client.Do(req)
@@ -247,20 +247,20 @@ Focus on actionable insights and be specific about what you find.`
 		return
 	}
 	defer resp.Body.Close()
-	
+
 	// Read response
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("Error reading response: %v\n", err)
 		return
 	}
-	
+
 	// Check if response is successful
 	if resp.StatusCode != http.StatusOK {
 		fmt.Printf("Error from Claude API: %s\n", string(body))
 		return
 	}
-	
+
 	// Parse response
 	var claudeResponse ClaudeResponse
 	err = json.Unmarshal(body, &claudeResponse)
@@ -268,20 +268,20 @@ Focus on actionable insights and be specific about what you find.`
 		fmt.Printf("Error parsing response: %v\n", err)
 		return
 	}
-	
+
 	// Check for API error
 	if claudeResponse.Error != nil {
-		fmt.Printf("Claude API error: %s - %s\n", 
-			claudeResponse.Error.Type, 
+		fmt.Printf("Claude API error: %s - %s\n",
+			claudeResponse.Error.Type,
 			claudeResponse.Error.Message)
 		return
 	}
-	
+
 	// Display analysis
 	fmt.Println("\n" + strings.Repeat("=", 80))
 	fmt.Println("CLAUDE AI LOG ANALYSIS")
 	fmt.Println(strings.Repeat("=", 80))
-	
+
 	// Check if we're using extended thinking mode
 	if thinkingBudget > 0 {
 		// Look for thinking content and final answer
@@ -297,7 +297,7 @@ Focus on actionable insights and be specific about what you find.`
 				}
 			}
 		}
-		
+
 		// Display thinking output if available
 		if thinkingOutput != "" {
 			fmt.Println("\n" + strings.Repeat("-", 80))
@@ -308,7 +308,7 @@ Focus on actionable insights and be specific about what you find.`
 			fmt.Println("FINAL ANALYSIS:")
 			fmt.Println(strings.Repeat("-", 80))
 		}
-		
+
 		// Display final answer
 		if finalAnswer != "" {
 			fmt.Println(finalAnswer)
@@ -328,6 +328,6 @@ Focus on actionable insights and be specific about what you find.`
 			}
 		}
 	}
-	
+
 	fmt.Println(strings.Repeat("=", 80))
 }
