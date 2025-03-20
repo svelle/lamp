@@ -10,15 +10,15 @@ import (
 
 // LogAnalysis contains statistics and insights from log entries
 type LogAnalysis struct {
-	TotalEntries      int
-	TimeRange         TimeRange
-	LevelCounts       map[string]int
-	TopSources        []CountedItem
-	TopUsers          []CountedItem
-	TopErrorMessages  []CountedItem
-	ErrorRate         float64
-	BusiestHours      []CountedItem
-	CommonPatterns    []CountedItem
+	TotalEntries     int
+	TimeRange        TimeRange
+	LevelCounts      map[string]int
+	TopSources       []CountedItem
+	TopUsers         []CountedItem
+	TopErrorMessages []CountedItem
+	ErrorRate        float64
+	BusiestHours     []CountedItem
+	CommonPatterns   []CountedItem
 }
 
 // TimeRange represents the time span of analyzed logs
@@ -44,13 +44,13 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 	hasDuplicateCounts := false
 	uniqueEntries := len(logs)
 	totalEntries := 0
-	
+
 	for _, log := range logs {
 		count := log.DuplicateCount
 		if count > 1 {
 			hasDuplicateCounts = true
 		}
-		
+
 		if count == 0 {
 			count = 1
 		}
@@ -83,7 +83,7 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 		analysis.TimeRange.Start = logs[0].Timestamp
 		analysis.TimeRange.End = logs[0].Timestamp
 	}
-	
+
 	// Track total entries including duplicates
 	totalWithDuplicates := 0
 
@@ -144,7 +144,7 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	// Calculate error rate
 	errorCount := analysis.LevelCounts["ERROR"] + analysis.LevelCounts["FATAL"]
 	analysis.ErrorRate = float64(errorCount) / float64(totalWithDuplicates) * 100
-	
+
 	// Update total entries to include duplicates
 	analysis.TotalEntries = totalWithDuplicates
 
@@ -152,14 +152,14 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	analysis.TopSources = mapToSortedSlice(sourceCounts, 10)
 	analysis.TopUsers = mapToSortedSlice(userCounts, 10)
 	analysis.TopErrorMessages = mapToSortedSlice(errorMsgCounts, 10)
-	
+
 	// Convert hourCounts (map[int]int) to string keys for mapToSortedSlice
 	hourCountsStr := make(map[string]int)
 	for hour, count := range hourCounts {
 		hourCountsStr[fmt.Sprintf("%d", hour)] = count
 	}
 	analysis.BusiestHours = mapToSortedSlice(hourCountsStr, 24)
-	
+
 	analysis.CommonPatterns = mapToSortedSlice(patternCounts, 10)
 
 	return analysis
@@ -188,27 +188,27 @@ func mapToSortedSlice(m map[string]int, limit int) []CountedItem {
 // displayAnalysis prints the analysis results
 func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool, uniqueEntries int) {
 	// ANSI color codes
-	headerColor := "\033[1;36m" // Bold Cyan
+	headerColor := "\033[1;36m"    // Bold Cyan
 	subHeaderColor := "\033[1;33m" // Bold Yellow
 	resetColor := "\033[0m"
-	
+
 	fmt.Fprintf(writer, "\n%s=== MATTERMOST LOG ANALYSIS ===%s\n\n", headerColor, resetColor)
-	
+
 	// Basic statistics
 	fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
 	if isDeduplicated {
 		fmt.Fprintf(writer, "Unique Log Entries: %d\n", uniqueEntries)
-		fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n", 
+		fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n",
 			analysis.TotalEntries, analysis.TotalEntries-uniqueEntries)
 		fmt.Fprintf(writer, "Deduplication Ratio: %.2f:1\n", float64(analysis.TotalEntries)/float64(uniqueEntries))
 	} else {
 		fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
 	}
-	fmt.Fprintf(writer, "Time Range: %s to %s\n", 
+	fmt.Fprintf(writer, "Time Range: %s to %s\n",
 		analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
 		analysis.TimeRange.End.Format("2006-01-02 15:04:05"))
 	fmt.Fprintf(writer, "Duration: %s\n\n", analysis.TimeRange.End.Sub(analysis.TimeRange.Start).Round(time.Second))
-	
+
 	// Log level distribution
 	fmt.Fprintf(writer, "%sLog Level Distribution:%s\n", subHeaderColor, resetColor)
 	for level, count := range analysis.LevelCounts {
@@ -217,7 +217,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		fmt.Fprintf(writer, "%s%s%s: %d (%.1f%%)\n", levelColor, level, resetColor, count, percentage)
 	}
 	fmt.Fprintf(writer, "Error Rate: %.2f%%\n\n", analysis.ErrorRate)
-	
+
 	// Top sources
 	fmt.Fprintf(writer, "%sTop Log Sources:%s\n", subHeaderColor, resetColor)
 	for i, source := range analysis.TopSources {
@@ -226,7 +226,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		}
 	}
 	fmt.Fprintln(writer)
-	
+
 	// Top users (if any)
 	if len(analysis.TopUsers) > 0 {
 		fmt.Fprintf(writer, "%sTop Active Users:%s\n", subHeaderColor, resetColor)
@@ -237,7 +237,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		}
 		fmt.Fprintln(writer)
 	}
-	
+
 	// Top error messages (if any)
 	if len(analysis.TopErrorMessages) > 0 {
 		fmt.Fprintf(writer, "%sTop Error Messages:%s\n", subHeaderColor, resetColor)
@@ -248,7 +248,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		}
 		fmt.Fprintln(writer)
 	}
-	
+
 	// Busiest hours
 	fmt.Fprintf(writer, "%sActivity by Hour:%s\n", subHeaderColor, resetColor)
 	// Find the max count for scaling
@@ -258,7 +258,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 			maxCount = hour.Count
 		}
 	}
-	
+
 	// Create a map for easier hour lookup
 	hourMap := make(map[int]int)
 	for _, hour := range analysis.BusiestHours {
@@ -266,7 +266,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		fmt.Sscanf(hour.Item, "%d", &hourNum)
 		hourMap[hourNum] = hour.Count
 	}
-	
+
 	// Display hours with bar chart
 	for hour := 0; hour < 24; hour++ {
 		count := hourMap[hour]
@@ -275,7 +275,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		fmt.Fprintf(writer, "%02d:00: %s (%d)\n", hour, bar, count)
 	}
 	fmt.Fprintln(writer)
-	
+
 	// Common message patterns
 	fmt.Fprintf(writer, "%sCommon Message Patterns:%s\n", subHeaderColor, resetColor)
 	for i, pattern := range analysis.CommonPatterns {
@@ -283,7 +283,7 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 			fmt.Fprintf(writer, "%d. \"%s\" (%d occurrences)\n", i+1, pattern.Item, pattern.Count)
 		}
 	}
-	
+
 	fmt.Fprintf(writer, "\n%s=== END OF ANALYSIS ===%s\n\n", headerColor, resetColor)
 }
 
