@@ -15,25 +15,24 @@ import (
 
 // LogEntry represents a parsed log entry from Mattermost logs
 type LogEntry struct {
-	Timestamp      time.Time `json:"timestamp"`
-	Level          string    `json:"level"`
-	Source         string    `json:"source"`
-	Message        string    `json:"message"`
-	User           string    `json:"user,omitempty"`
-	Details        string    `json:"details,omitempty"`
-	Caller         string    `json:"caller,omitempty"`
-	DuplicateCount int       `json:"duplicate_count,omitempty"`
+	Timestamp      time.Time         `json:"timestamp"`
+	Level          string            `json:"level"`
+	Message        string            `json:"message"`
+	Source         string            `json:"source,omitempty"`
+	User           string            `json:"user,omitempty"`
+	Extras         map[string]string `json:"extras,omitempty"`
+	DuplicateCount int               `json:"duplicate_count,omitempty"`
 }
 
-// JSONLogEntry represents a JSON-formatted log entry
-type JSONLogEntry struct {
-	Timestamp string                 `json:"timestamp"`
-	Level     string                 `json:"level"`
-	Msg       string                 `json:"msg"`
-	Caller    string                 `json:"caller,omitempty"`
-	UserID    string                 `json:"user_id,omitempty"`
-	Error     string                 `json:"error,omitempty"`
-	Extra     map[string]interface{} `json:"-"`
+// ExtrasToString converts the Extras map to a comma-separated string of key-value pairs.
+// Each pair is formatted as "key=value". The pairs are sorted alphabetically by key.
+// Returns an empty string if Extras is nil or empty.
+func (l *LogEntry) ExtrasToString() string {
+	extras := []string{}
+	for k, v := range l.Extras {
+		extras = append(extras, fmt.Sprintf("%s=%v", k, v))
+	}
+	return strings.Join(extras, ", ")
 }
 
 // parseLogFile reads and parses a Mattermost log file, applying filters
@@ -102,53 +101,72 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 
 // parseLine attempts to parse a single log line into a LogEntry
 func parseLine(line string) (LogEntry, error) {
-	var entry LogEntry
-
 	// Check if the line is in JSON format
 	if strings.HasPrefix(strings.TrimSpace(line), "{") {
 		return parseJSONLine(line)
 	}
 
+	var entry LogEntry
 	// Basic format detection and parsing
-	// Example format: 2023-04-15T14:22:34.123Z [INFO] api.user.login.success
-	parts := strings.SplitN(line, " ", 3)
-	if len(parts) < 3 {
+	// Example format:
+	// debug [2025-02-27 15:42:40.076 Z] Received HTTP request caller="web/handlers.go:187" method=GET url=/api/v4/groups request_id=XYZ user_id=ABC status_code=200
+	parts := strings.SplitN(line, " [", 2)
+	if len(parts) != 2 {
+		return entry, fmt.Errorf("invalid log format")
+	}
+
+	// Parse log level
+	entry.Level = strings.TrimSpace(parts[0])
+
+	// Split remaining parts by closing bracket
+	remainingParts := strings.SplitN(parts[1], "] ", 2)
+	if len(remainingParts) != 2 {
 		return entry, fmt.Errorf("invalid log format")
 	}
 
 	// Parse timestamp
-	timestamp, err := parseTimestamp(parts[0])
+	timestamp, err := parseTimestamp(remainingParts[0])
 	if err != nil {
 		return entry, err
 	}
 	entry.Timestamp = timestamp
 
-	// Parse log level
-	levelPart := parts[1]
-	if len(levelPart) < 3 {
-		return entry, fmt.Errorf("invalid level format")
-	}
-	entry.Level = strings.Trim(levelPart, "[]")
+	// Parse message and metadata
+	rest := remainingParts[1]
 
-	// Parse message and additional details
-	messagePart := parts[2]
+	// Initialize extras map
+	entry.Extras = make(map[string]string)
 
-	// Extract user if present
-	if userStart := strings.Index(messagePart, "user_id="); userStart != -1 {
-		userEnd := strings.Index(messagePart[userStart:], " ")
-		if userEnd == -1 {
-			userEnd = len(messagePart) - userStart
+	// No caller, just split on first key-value pair
+	fields := strings.Fields(rest)
+	messageWords := []string{}
+
+	// Collect words until we hit a key=value pair
+	for _, word := range fields {
+		if strings.Contains(word, "=") {
+			break
 		}
-		userInfo := messagePart[userStart : userStart+userEnd]
-		entry.User = strings.TrimPrefix(userInfo, "user_id=")
+		messageWords = append(messageWords, word)
 	}
+	entry.Message = strings.Join(messageWords, " ")
 
-	// Extract source and message
-	if sourceEnd := strings.Index(messagePart, " "); sourceEnd != -1 {
-		entry.Source = messagePart[:sourceEnd]
-		entry.Message = messagePart[sourceEnd+1:]
-	} else {
-		entry.Message = messagePart
+	// Process remaining key-value pairs
+	for _, pair := range fields[len(messageWords):] {
+		if strings.Contains(pair, "=") {
+			parts := strings.SplitN(pair, "=", 2)
+			if len(parts) != 2 {
+				return entry, fmt.Errorf("invalid key-value pair: %s", pair)
+			}
+			k, v := parts[0], parts[1]
+			switch k {
+			case "caller":
+				entry.Source = strings.Trim(v, "\"")
+			case "user_id":
+				entry.User = v
+			default:
+				entry.Extras[k] = v
+			}
+		}
 	}
 
 	return entry, nil
@@ -157,6 +175,16 @@ func parseLine(line string) (LogEntry, error) {
 // parseJSONLine parses a JSON-formatted log line
 func parseJSONLine(line string) (LogEntry, error) {
 	var entry LogEntry
+	entry.Extras = make(map[string]string)
+
+	// JSONLogEntry represents a JSON-formatted log entry
+	type JSONLogEntry struct {
+		Timestamp string `json:"timestamp"`
+		Level     string `json:"level"`
+		Msg       string `json:"msg"`
+		Caller    string `json:"caller,omitempty"`
+		UserID    string `json:"user_id,omitempty"`
+	}
 	var jsonEntry JSONLogEntry
 
 	// Unmarshal the JSON log entry
@@ -169,65 +197,42 @@ func parseJSONLine(line string) (LogEntry, error) {
 	}
 
 	// Extract additional fields
-	var extra map[string]interface{}
-	if err := json.Unmarshal([]byte(line), &extra); err == nil {
-		// Build details string from extra fields
-		var details strings.Builder
-		for k, v := range extra {
-			// Skip fields we already handle
-			if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
-				continue
-			}
-
-			// Special handling for error field
-			if k == "error" && v != nil {
-				if details.Len() > 0 {
-					details.WriteString(", ")
-				}
-				details.WriteString(fmt.Sprintf("error=%v", v))
-				continue
-			}
-
-			if details.Len() > 0 {
-				details.WriteString(", ")
-			}
-
-			// Handle nil values
-			if v == nil {
-				details.WriteString(fmt.Sprintf("%s=nil", k))
-			} else {
-				details.WriteString(fmt.Sprintf("%s=%v", k, v))
-			}
+	var extra map[string]any
+	if err := json.Unmarshal([]byte(line), &extra); err != nil {
+		return entry, fmt.Errorf("failed to parse extra JSON fields: %v", err)
+	}
+	for k, v := range extra {
+		// Skip fields we already handle
+		if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
+			continue
 		}
-		entry.Details = details.String()
+
+		// Convert non-string values to strings
+		switch val := v.(type) {
+		case string:
+			entry.Extras[k] = val
+		default:
+			// Use json.Marshal to convert other types to string representation
+			bytes, err := json.Marshal(val)
+			if err != nil {
+				return entry, fmt.Errorf("failed to marshal extra field %s: %v", k, err)
+			}
+			entry.Extras[k] = string(bytes)
+		}
 	}
 
 	// Parse timestamp
-	timestamp, err := parseTimestamp(jsonEntry.Timestamp)
+	timestamp, err := parseTimestamp(strings.TrimSpace(jsonEntry.Timestamp))
 	if err != nil {
-		// If parsing failed with the standard format, try to fix common timestamp issues
-		fixedTimestamp := strings.TrimSpace(jsonEntry.Timestamp)
-		timestamp, err = parseTimestamp(fixedTimestamp)
-		if err != nil {
-			// Continue with a default timestamp rather than failing completely
-			entry.Timestamp = time.Now()
-		} else {
-			entry.Timestamp = timestamp
-		}
-	} else {
-		entry.Timestamp = timestamp
+		return entry, err
 	}
+	entry.Timestamp = timestamp
 
 	// Set other fields
 	entry.Level = jsonEntry.Level
 	entry.Message = jsonEntry.Msg
 	entry.User = jsonEntry.UserID
-
-	// Set source from caller if available
-	if jsonEntry.Caller != "" {
-		entry.Source = jsonEntry.Caller
-		entry.Caller = jsonEntry.Caller
-	}
+	entry.Source = jsonEntry.Caller
 
 	return entry, nil
 }
@@ -534,22 +539,6 @@ func levenshteinDistance(s1, s2 string) int {
 	return v1[len(s2)]
 }
 
-// min returns the smallest of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
-// max returns the largest of two integers
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
 // shouldIncludeEntry checks if a log entry matches all the specified filters
 func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, userFilter string, startTime, endTime time.Time) bool {
 	// Apply level filter
@@ -578,7 +567,7 @@ func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp,
 
 		if !strings.Contains(messageLower, searchLower) &&
 			!strings.Contains(sourceLower, searchLower) &&
-			!strings.Contains(strings.ToLower(entry.Details), searchLower) {
+			!strings.Contains(strings.ToLower(entry.ExtrasToString()), searchLower) {
 			return false
 		}
 	}
@@ -588,7 +577,7 @@ func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp,
 		// Check if regex matches any field
 		if !regex.MatchString(entry.Message) &&
 			!regex.MatchString(entry.Source) &&
-			!regex.MatchString(entry.Details) &&
+			!regex.MatchString(entry.ExtrasToString()) &&
 			!regex.MatchString(entry.User) {
 			return false
 		}
