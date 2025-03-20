@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -294,7 +295,9 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		}))
 
 	// Render initial blank progress bar
-	bar.RenderBlank()
+	if err := bar.RenderBlank(); err != nil {
+		log.Printf("Error rendering progress bar: %v", err)
+	}
 
 	removedCount := 0
 
@@ -307,7 +310,9 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 
 		// Skip if already processed
 		if processedEntries[i] {
-			_ = bar.Add(1) // Ignore error
+			if err := bar.Add(1); err != nil {
+				log.Printf("Error updating progress bar: %v", err)
+			}
 			continue
 		}
 
@@ -366,7 +371,9 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		}
 
 		// Update progress bar
-		_ = bar.Add(1) // Ignore error
+		if err := bar.Add(1); err != nil {
+			log.Printf("Error updating progress bar: %v", err)
+		}
 	}
 
 	// Ensure the bar is completed
