@@ -121,12 +121,17 @@ func updateLogList(list *tview.List, logs []LogEntry, filter string, detailsView
 		levelColor := getLevelColorName(log.Level)
 		timestamp := log.Timestamp.Format("15:04:05")
 
+		message := truncateString(log.Message, 80)
+		if log.DuplicateCount > 1 {
+			message = fmt.Sprintf("%s [yellow](×%d)", message, log.DuplicateCount)
+		}
+
 		list.AddItem(
 			fmt.Sprintf("[%s]%s[white] [%s] %s",
 				levelColor,
 				log.Level,
 				timestamp,
-				truncateString(log.Message, 80)),
+				message),
 			log.Source,
 			0,
 			func(index int) func() {
@@ -150,7 +155,7 @@ func updateLogList(list *tview.List, logs []LogEntry, filter string, detailsView
 func showLogDetails(log LogEntry, view *tview.TextView) {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("[yellow]Timestamp:[white] %s\n\n", log.Timestamp.Format(time.RFC3339)))
+	sb.WriteString(fmt.Sprintf("[yellow]Timestamp:[white] %s\n", log.Timestamp.Format(time.RFC3339)))
 	sb.WriteString(fmt.Sprintf("[yellow]Level:[white] [%s]%s[white]\n\n", getLevelColorName(log.Level), log.Level))
 
 	if log.Source != "" {
@@ -158,10 +163,18 @@ func showLogDetails(log LogEntry, view *tview.TextView) {
 	}
 
 	if log.User != "" {
-		sb.WriteString(fmt.Sprintf("[yellow]User:[white] %s\n\n", log.User))
+		sb.WriteString(fmt.Sprintf("[yellow]User:[white] %s\n", log.User))
 	}
 
-	sb.WriteString(fmt.Sprintf("[yellow]Message:[white]\n%s\n\n", log.Message))
+	for key, value := range log.Extras {
+		sb.WriteString(fmt.Sprintf("[yellow]%s:[white] %s\n", key, value))
+	}
+
+	sb.WriteString(fmt.Sprintf("\n[yellow]Message:[white]\n%s\n\n", log.Message))
+
+	if log.DuplicateCount > 1 {
+		sb.WriteString(fmt.Sprintf("[yellow]Occurrences:[white] %d\n\n", log.DuplicateCount))
+	}
 
 	view.SetText(sb.String())
 	view.ScrollToBeginning()

@@ -34,18 +34,38 @@ type CountedItem struct {
 }
 
 // analyzeAndDisplayStats analyzes log entries and displays statistics
-func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer) {
+func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 	if len(logs) == 0 {
 		fmt.Fprintln(writer, "No log entries to analyze.")
 		return
 	}
 
-	analysis := analyzeLogs(logs)
-	displayAnalysis(analysis, writer)
+	// Check if any logs have duplicate counts
+	hasDuplicateCounts := false
+	uniqueEntries := len(logs)
+	totalEntries := 0
+
+	for _, log := range logs {
+		count := log.DuplicateCount
+		if count > 1 {
+			hasDuplicateCounts = true
+		}
+
+		if count == 0 {
+			count = 1
+		}
+		totalEntries += count
+	}
+
+	// Only consider logs deduplicated if they actually have duplicate counts AND showDupes is true
+	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries && showDupes
+
+	analysis := analyzeLogs(logs, showDupes)
+	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries)
 }
 
 // analyzeLogs performs analysis on log entries
-func analyzeLogs(logs []LogEntry) LogAnalysis {
+func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	analysis := LogAnalysis{
 		TotalEntries: len(logs),
 		LevelCounts:  make(map[string]int),
@@ -64,8 +84,17 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 		analysis.TimeRange.End = logs[0].Timestamp
 	}
 
+	// Track total entries including duplicates
+	totalWithDuplicates := 0
+
 	// Process each log entry
 	for _, log := range logs {
+		// Get the count (either the duplicate count or 1 if not set)
+		count := 1
+		if showDupes && log.DuplicateCount > 1 {
+			count = log.DuplicateCount
+		}
+		totalWithDuplicates += count
 		// Update time range
 		if log.Timestamp.Before(analysis.TimeRange.Start) {
 			analysis.TimeRange.Start = log.Timestamp
@@ -75,16 +104,16 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 		}
 
 		// Count log levels
-		analysis.LevelCounts[strings.ToUpper(log.Level)]++
+		analysis.LevelCounts[strings.ToUpper(log.Level)] += count
 
 		// Count sources
 		if log.Source != "" {
-			sourceCounts[log.Source]++
+			sourceCounts[log.Source] += count
 		}
 
 		// Count users
 		if log.User != "" {
-			userCounts[log.User]++
+			userCounts[log.User] += count
 		}
 
 		// Count error messages
@@ -94,12 +123,12 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 			if len(shortMsg) > 50 {
 				shortMsg = shortMsg[:50] + "..."
 			}
-			errorMsgCounts[shortMsg]++
+			errorMsgCounts[shortMsg] += count
 		}
 
 		// Count activity by hour
 		hour := log.Timestamp.Hour()
-		hourCounts[hour]++
+		hourCounts[hour] += count
 
 		// Identify common patterns in messages
 		words := strings.Fields(log.Message)
@@ -108,13 +137,16 @@ func analyzeLogs(logs []LogEntry) LogAnalysis {
 			if len(words) > 1 {
 				pattern += " " + words[1]
 			}
-			patternCounts[pattern]++
+			patternCounts[pattern] += count
 		}
 	}
 
 	// Calculate error rate
 	errorCount := analysis.LevelCounts["ERROR"] + analysis.LevelCounts["FATAL"]
-	analysis.ErrorRate = float64(errorCount) / float64(analysis.TotalEntries) * 100
+	analysis.ErrorRate = float64(errorCount) / float64(totalWithDuplicates) * 100
+
+	// Update total entries to include duplicates
+	analysis.TotalEntries = totalWithDuplicates
 
 	// Convert maps to sorted slices
 	analysis.TopSources = mapToSortedSlice(sourceCounts, 10)
@@ -154,7 +186,7 @@ func mapToSortedSlice(m map[string]int, limit int) []CountedItem {
 }
 
 // displayAnalysis prints the analysis results
-func displayAnalysis(analysis LogAnalysis, writer io.Writer) {
+func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool, uniqueEntries int) {
 	// ANSI color codes
 	headerColor := "\033[1;36m"    // Bold Cyan
 	subHeaderColor := "\033[1;33m" // Bold Yellow
@@ -164,7 +196,14 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer) {
 
 	// Basic statistics
 	fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
-	fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
+	if isDeduplicated {
+		fmt.Fprintf(writer, "Unique Log Entries: %d\n", uniqueEntries)
+		fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n",
+			analysis.TotalEntries, analysis.TotalEntries-uniqueEntries)
+		fmt.Fprintf(writer, "Deduplication Ratio: %.2f:1\n", float64(analysis.TotalEntries)/float64(uniqueEntries))
+	} else {
+		fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
+	}
 	fmt.Fprintf(writer, "Time Range: %s to %s\n",
 		analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
 		analysis.TimeRange.End.Format("2006-01-02 15:04:05"))

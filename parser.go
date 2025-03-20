@@ -14,12 +14,13 @@ import (
 
 // LogEntry represents a parsed log entry from Mattermost logs
 type LogEntry struct {
-	Timestamp time.Time         `json:"timestamp"`
-	Level     string            `json:"level"`
-	Message   string            `json:"message"`
-	Source    string            `json:"source,omitempty"`
-	User      string            `json:"user,omitempty"`
-	Extras    map[string]string `json:"extras,omitempty"`
+	Timestamp      time.Time         `json:"timestamp"`
+	Level          string            `json:"level"`
+	Message        string            `json:"message"`
+	Source         string            `json:"source,omitempty"`
+	User           string            `json:"user,omitempty"`
+	Extras         map[string]string `json:"extras,omitempty"`
+	DuplicateCount int               `json:"duplicate_count,omitempty"`
 }
 
 // ExtrasToString converts the Extras map to a comma-separated string of key-value pairs.
@@ -311,8 +312,10 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 			continue
 		}
 
-		// Add this entry to results
-		result = append(result, entry)
+		// Add this entry to results (with initial duplicate count of 1)
+		entryWithCount := entry
+		entryWithCount.DuplicateCount = 1
+		result = append(result, entryWithCount)
 		processedEntries[i] = true
 
 		// Normalize the current message
@@ -352,6 +355,9 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 				processedEntries[j] = true
 				processedInThisIteration++
 				removedCount++
+
+				// Increment duplicate count for this entry
+				result[len(result)-1].DuplicateCount++
 
 				// Update progress description more frequently during batch removals
 				if processedInThisIteration%10 == 0 {
