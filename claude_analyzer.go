@@ -106,7 +106,7 @@ func analyzeWithClaude(logs []LogEntry, apiKey string, maxEntries int, problemSt
 			logText.WriteString(fmt.Sprintf("   Source: %s\n", log.Source))
 		}
 		if len(log.Extras) > 0 {
-			logText.WriteString(fmt.Sprintf("   Extras: %s\n", log.Extras))
+			logText.WriteString(fmt.Sprintf("   Extras: %s\n", log.ExtrasToString()))
 		}
 		logText.WriteString("\n")
 	}
