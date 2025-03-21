@@ -37,14 +37,14 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 			// Extract the file
 			extractedPath := filepath.Join(tempDir, filepath.Base(file.Name))
 			if err := extractZipFile(file, extractedPath); err != nil {
-				fmt.Printf("Warning: Failed to extract %s: %v\n", file.Name, err)
+				logger.Warn("Failed to extract file from support packet", "file", file.Name, "error", err)
 				continue
 			}
 
 			// Parse the extracted log file
 			logs, err := parseLogFile(extractedPath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr)
 			if err != nil {
-				fmt.Printf("Warning: Failed to parse %s: %v\n", file.Name, err)
+				logger.Warn("Failed to parse log file", "file", file.Name, "error", err)
 				continue
 			}
 

@@ -59,6 +59,7 @@ lamp <command> [flags]
 
 - `file <path>`: Parse a single Mattermost log file
 - `support-packet <path>`: Parse a Mattermost support packet zip file
+- `version`: Print version and build information
 - `completion`: Generate shell completion scripts
 - `help`: Help about any command
 
@@ -79,6 +80,8 @@ lamp <command> [flags]
 - `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
 - `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
 - `--interactive`: Launch interactive TUI mode for exploring logs
+- `--verbose`: Enable debug level logging output
+- `--quiet`: Only output errors (suppresses info, warn, and debug messages)
 - `--help`: Show help information for any command
 
 ### Shell Completion
@@ -152,6 +155,11 @@ lamp file mattermost.log --csv logs_export.csv
 Save output to a file:
 ```bash
 lamp file mattermost.log --analyze --output analysis_report.txt
+```
+
+Show version information:
+```bash
+mlp version
 ```
 
 Launch interactive TUI mode for exploring logs:
@@ -287,6 +295,26 @@ Note: When using AI analysis, a limited number of log entries are sent to the Cl
 
 You can also provide a problem statement with the `--problem` flag to help guide the AI analysis toward specific issues you're investigating.
 
+## Logging
+
+MLP uses structured logging for its output. By default, it logs at the INFO level. You can modify the logging level using these flags:
+
+- `--verbose`: Show detailed debug information
+- `--quiet`: Only show error messages
+
+These flags are mutually exclusive - if both are provided, `--quiet` takes precedence.
+
+Examples:
+```bash
+# Default behavior - show info and error messages
+mlp file logfile.txt
+
+# Show detailed debug information
+mlp file logfile.txt --verbose
+
+# Only show errors
+mlp file logfile.txt --quiet
+```
 ## License
 
 [MIT License](LICENSE)

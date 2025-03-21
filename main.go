@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"runtime"
+	"runtime/debug"
 
 	"github.com/spf13/cobra"
 )
@@ -27,6 +30,11 @@ var (
 	problem        string
 	thinkingBudget int
 	interactive    bool
+	verbose        bool
+	quiet          bool
+
+	// Global logger
+	logger *slog.Logger
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -36,6 +44,9 @@ var rootCmd = &cobra.Command{
 	Long: `lamp (Log Analyser for Mattermost Packet) allows you to parse, filter, and analyze Mattermost log files
 and support packets. It provides various filtering options, analysis capabilities,
 and AI-powered insights using Claude AI.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		initLogger()
+	},
 }
 
 var fileCmd = &cobra.Command{
@@ -84,7 +95,57 @@ var supportPacketCmd = &cobra.Command{
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
 
+		if verbose {
+			fmt.Printf("Debug: processing %d log entries\n", len(logs))
+		}
+
 		return processLogs(logs)
+	},
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		info, ok := debug.ReadBuildInfo()
+		if !ok {
+			return fmt.Errorf("could not read build information")
+		}
+		// Get version (usually from the module path)
+		version := info.Main.Version
+		if version == "(devel)" {
+			version = "dev"
+		}
+		fmt.Printf("Version:\t%s\n", version)
+
+		// Extract other build information from settings
+		var commitDate, gitCommit, gitTreeState string
+		for _, setting := range info.Settings {
+			switch setting.Key {
+			case "vcs.time":
+				commitDate = setting.Value
+			case "vcs.revision":
+				gitCommit = setting.Value
+			case "vcs.modified":
+				gitTreeState = "clean"
+				if setting.Value == "true" {
+					gitTreeState = "dirty"
+				}
+			}
+		}
+
+		// Print all version information
+		if commitDate != "" {
+			fmt.Printf("CommitDate:\t%s\n", commitDate)
+		}
+		if gitCommit != "" {
+			fmt.Printf("GitCommit:\t%s\n", gitCommit)
+		}
+		fmt.Printf("GitTreeState:\t%s\n", gitTreeState)
+		fmt.Printf("GoVersion:\t%s\n", runtime.Version())
+		fmt.Printf("Compiler:\t%s\n", runtime.Compiler)
+		fmt.Printf("Platform:\t%s/%s\n", runtime.GOARCH, runtime.GOOS)
+		return nil
 	},
 }
 
@@ -95,6 +156,26 @@ func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func
 	}
 }
 
+func initLogger() {
+	// Set log level based on flags
+	logLevel := slog.LevelInfo
+	switch {
+	case quiet:
+		logLevel = slog.LevelError
+	case verbose:
+		logLevel = slog.LevelDebug
+	}
+
+	// Create handler with the appropriate level
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	})
+
+	// Initialize global logger
+	logger = slog.New(handler)
+	slog.SetDefault(logger)
+}
+
 func init() {
 	// Enable command completion
 	rootCmd.CompletionOptions.DisableDefaultCmd = false
@@ -102,6 +183,7 @@ func init() {
 	// Add subcommands to root command
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(supportPacketCmd)
+	rootCmd.AddCommand(versionCmd)
 
 	// Add shared flags to both subcommands
 	commands := []*cobra.Command{fileCmd, supportPacketCmd}
@@ -124,6 +206,8 @@ func init() {
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
 		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
+		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
+		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -144,7 +228,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
@@ -170,17 +254,19 @@ func main() {
 func processLogs(logs []LogEntry) error {
 	// Apply trim if requested
 	if trim {
-		fmt.Printf("Starting deduplication of %d log entries...\n", len(logs))
+		logger.Info("Starting deduplication", "count", len(logs))
 		originalCount := len(logs)
 		logs = trimDuplicateLogInfo(logs)
-		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n",
-			originalCount, len(logs), originalCount-len(logs))
+		logger.Info("finished deduplication",
+			"original", originalCount,
+			"final", len(logs),
+			"removed", originalCount-len(logs))
 
 		if trimJSON != "" {
 			if err := writeLogsToJSON(logs, trimJSON); err != nil {
 				return fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
 			}
-			fmt.Printf("Deduplicated logs written to JSON file: %s\n", trimJSON)
+			logger.Info("wrote deduplicated logs", "file", trimJSON)
 		}
 	}
 
