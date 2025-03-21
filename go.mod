@@ -1,4 +1,4 @@
-module github.com/svelle/mlp
+module github.com/svelle/lamp
 
 go 1.23
 

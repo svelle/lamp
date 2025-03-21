@@ -39,9 +39,9 @@ var (
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:   "mlp",
-	Short: "Mattermost Log Parser (mlp) is a tool for parsing and analyzing Mattermost log files",
-	Long: `Mattermost Log Parser (mlp) allows you to parse, filter, and analyze Mattermost log files
+	Use:   "lamp",
+	Short: "lamp is a tool for parsing and analyzing Mattermost log files",
+	Long: `lamp (Log Analyser for Mattermost Packet) allows you to parse, filter, and analyze Mattermost log files
 and support packets. It provides various filtering options, analysis capabilities,
 and AI-powered insights using Claude AI.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {

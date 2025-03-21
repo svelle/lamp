@@ -1,4 +1,4 @@
-project_name: mlp
+project_name: lamp
 
 before:
   hooks:

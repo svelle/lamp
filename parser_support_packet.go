@@ -21,7 +21,7 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	var allLogs []LogEntry
 
 	// Create a temporary directory to extract files
-	tempDir, err := os.MkdirTemp("", "mlp_support_packet")
+	tempDir, err := os.MkdirTemp("", "lamp_support_packet")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %v", err)
 	}
