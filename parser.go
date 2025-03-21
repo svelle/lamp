@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"strings"
@@ -80,9 +79,9 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 	for scanner.Scan() {
 		line := scanner.Text()
 		entry, err := parseLine(line)
-
-		// Skip lines that couldn't be parsed
 		if err != nil {
+			logger.Debug("skipping unparseable line", "line", line, "error", err)
+			// Skip lines that couldn't be parsed
 			continue
 		}
 
@@ -296,7 +295,7 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 
 	// Render initial blank progress bar
 	if err := bar.RenderBlank(); err != nil {
-		log.Printf("Error rendering progress bar: %v", err)
+		logger.Warn("Error rendering progress bar", "error", err)
 	}
 
 	removedCount := 0
@@ -311,7 +310,7 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		// Skip if already processed
 		if processedEntries[i] {
 			if err := bar.Add(1); err != nil {
-				log.Printf("Error updating progress bar: %v", err)
+				logger.Warn("Error updating progress bar", "error", err)
 			}
 			continue
 		}
@@ -372,12 +371,14 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 
 		// Update progress bar
 		if err := bar.Add(1); err != nil {
-			log.Printf("Error updating progress bar: %v", err)
+			logger.Warn("Error updating progress bar", "error", err)
 		}
 	}
 
 	// Ensure the bar is completed
-	_ = bar.Finish()
+	if err := bar.Finish(); err != nil {
+		logger.Warn("Error completing progress bar", "error", err)
+	}
 
 	return result
 }
