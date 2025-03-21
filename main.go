@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -27,6 +28,11 @@ var (
 	problem        string
 	thinkingBudget int
 	interactive    bool
+	verbose        bool
+	quiet          bool
+
+	// Global logger
+	logger *slog.Logger
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -36,6 +42,9 @@ var rootCmd = &cobra.Command{
 	Long: `Mattermost Log Parser (mlp) allows you to parse, filter, and analyze Mattermost log files
 and support packets. It provides various filtering options, analysis capabilities,
 and AI-powered insights using Claude AI.`,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		initLogger()
+	},
 }
 
 var fileCmd = &cobra.Command{
@@ -84,6 +93,10 @@ var supportPacketCmd = &cobra.Command{
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
 
+		if verbose {
+			fmt.Printf("Debug: processing %d log entries\n", len(logs))
+		}
+
 		return processLogs(logs)
 	},
 }
@@ -93,6 +106,26 @@ func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func
 	if err := cmd.RegisterFlagCompletionFunc(flag, completionFunc); err != nil {
 		panic(fmt.Sprintf("failed to register completion for --%s flag: %v", flag, err))
 	}
+}
+
+func initLogger() {
+	// Set log level based on flags
+	logLevel := slog.LevelInfo
+	switch {
+	case quiet:
+		logLevel = slog.LevelError
+	case verbose:
+		logLevel = slog.LevelDebug
+	}
+
+	// Create handler with the appropriate level
+	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: logLevel,
+	})
+
+	// Initialize global logger
+	logger = slog.New(handler)
+	slog.SetDefault(logger)
 }
 
 func init() {
@@ -124,6 +157,8 @@ func init() {
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
 		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
+		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
+		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -144,7 +179,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
@@ -170,17 +205,19 @@ func main() {
 func processLogs(logs []LogEntry) error {
 	// Apply trim if requested
 	if trim {
-		fmt.Printf("Starting deduplication of %d log entries...\n", len(logs))
+		logger.Info("Starting deduplication", "count", len(logs))
 		originalCount := len(logs)
 		logs = trimDuplicateLogInfo(logs)
-		fmt.Printf("Trimmed from %d to %d entries after removing duplicates (removed %d entries)\n",
-			originalCount, len(logs), originalCount-len(logs))
+		logger.Info("finished deduplication",
+			"original", originalCount,
+			"final", len(logs),
+			"removed", originalCount-len(logs))
 
 		if trimJSON != "" {
 			if err := writeLogsToJSON(logs, trimJSON); err != nil {
 				return fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
 			}
-			fmt.Printf("Deduplicated logs written to JSON file: %s\n", trimJSON)
+			logger.Info("wrote deduplicated logs", "file", trimJSON)
 		}
 	}
 
