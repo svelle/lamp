@@ -21,7 +21,7 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	var allLogs []LogEntry
 
 	// Create a temporary directory to extract files
-	tempDir, err := os.MkdirTemp("", "mlp_support_packet")
+	tempDir, err := os.MkdirTemp("", "lamp_support_packet")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %v", err)
 	}
@@ -30,10 +30,10 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	// Look for log files in the zip
 	for _, file := range reader.File {
 		// Check if it's a log file
-		if strings.HasSuffix(file.Name, "mattermost.log") || 
-		   strings.Contains(file.Name, "/logs/") || 
-		   strings.Contains(file.Name, "\\logs\\") {
-			
+		if strings.HasSuffix(file.Name, "mattermost.log") ||
+			strings.Contains(file.Name, "/logs/") ||
+			strings.Contains(file.Name, "\\logs\\") {
+
 			// Extract the file
 			extractedPath := filepath.Join(tempDir, filepath.Base(file.Name))
 			if err := extractZipFile(file, extractedPath); err != nil {

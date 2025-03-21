@@ -1,6 +1,6 @@
-# Mattermost Log Parser (mlp)
+# lamp 
 
-A command-line tool for parsing, filtering, and displaying Mattermost log files with enhanced readability.
+`lamp` (Log Analyser for Mattermost Packet) is a command-line tool for parsing, filtering, and displaying Mattermost log files with enhanced readability.
 
 ## Features
 
@@ -11,33 +11,48 @@ A command-line tool for parsing, filtering, and displaying Mattermost log files 
 
 ## Installation
 
-### Prerequisites
+### Installing from releases
 
-- Go 1.18 or higher
+1. Visit the [releases page](https://github.com/svelle/lamp/releases/latest) on GitHub
+2. Download the release for your operating system and architecture
+3. Extract the downloaded archive
+4. Move the `lamp` binary to a directory in your PATH:
+
+   ```bash
+   # Linux/macOS
+   sudo mv lamp /usr/local/bin/
+
+   # Windows
+   # Move lamp.exe to a directory in your PATH
+   ```
+
+5. Verify the installation:
+   ```bash
+   lamp --version
+   ```
+
 
 ### Building from source
 
-1. Clone the repository:
+**Prerequisites**:
+
+- Go 1.23 or higher
+
+1. Install directly using go install:
    ```bash
-   git clone https://github.com/yourusername/mlp.git
-   cd mlp
+   go install github.com/svelle/lamp@latest
    ```
 
-2. Build the application:
+The binary will be installed to your `$GOPATH/bin` directory, which should be in your PATH. If it's not, add the following to your shell's configuration file (e.g., `~/.bashrc`, `~/.zshrc`):
    ```bash
-   go build -o mlp
-   ```
-
-3. (Optional) Move the binary to a directory in your PATH:
-   ```bash
-   sudo mv mlp /usr/local/bin/
+   export PATH=$PATH:$(go env GOPATH)/bin
    ```
 
 ## Usage
 
 Basic command structure:
 ```bash
-mlp <command> [flags]
+lamp <command> [flags]
 ```
 
 ### Commands
@@ -72,102 +87,102 @@ The tool supports shell completion for commands, flags, and arguments. To enable
 
 ```bash
 # For bash
-mlp completion bash > /etc/bash_completion.d/mlp
+lamp completion bash > /etc/bash_completion.d/lamp
 
 # For zsh
-mlp completion zsh > "${fpath[1]}/_mlp"
+lamp completion zsh > "${fpath[1]}/_lamp"
 
 # For fish
-mlp completion fish > ~/.config/fish/completions/mlp.fish
+lamp completion fish > ~/.config/fish/completions/lamp.fish
 ```
 
 After enabling completion, you can use:
-- Tab completion for commands: `mlp [tab]`
-- Tab completion for log files: `mlp file [tab]`
-- Tab completion for flag values: `mlp file log.txt --level [tab]`
-- File path completion for relevant flags: `mlp file log.txt --output [tab]`
+- Tab completion for commands: `lamp [tab]`
+- Tab completion for log files: `lamp file [tab]`
+- Tab completion for flag values: `lamp file log.txt --level [tab]`
+- File path completion for relevant flags: `lamp file log.txt --output [tab]`
 
 ### Examples
 
 Parse a single log file:
 ```bash
-mlp file mattermost.log
+lamp file mattermost.log
 ```
 
 Parse a support packet:
 ```bash
-mlp support-packet mattermost_support_packet.zip
+lamp support-packet mattermost_support_packet.zip
 ```
 
 Filter logs containing the word "error":
 ```bash
-mlp file mattermost.log --search "error"
+lamp file mattermost.log --search "error"
 ```
 
 Show only error-level logs:
 ```bash
-mlp file mattermost.log --level error
+lamp file mattermost.log --level error
 ```
 
 Filter logs by user and output as JSON:
 ```bash
-mlp file mattermost.log --user admin --json
+lamp file mattermost.log --user admin --json
 ```
 
 Combine multiple filters:
 ```bash
-mlp file mattermost.log --level error --search "database"
+lamp file mattermost.log --level error --search "database"
 ```
 
 Filter logs by time range:
 ```bash
-mlp file mattermost.log --start 2023-01-01T00:00:00 --end 2023-01-02T00:00:00
+lamp file mattermost.log --start 2023-01-01T00:00:00 --end 2023-01-02T00:00:00
 ```
 
 Use regular expressions for advanced filtering:
 ```bash
-mlp file mattermost.log --regex "error.*database"
+lamp file mattermost.log --regex "error.*database"
 ```
 
 Export logs to CSV for spreadsheet analysis:
 ```bash
-mlp file mattermost.log --csv logs_export.csv
+lamp file mattermost.log --csv logs_export.csv
 ```
 
 Save output to a file:
 ```bash
-mlp file mattermost.log --analyze --output analysis_report.txt
+lamp file mattermost.log --analyze --output analysis_report.txt
 ```
 
 Launch interactive TUI mode for exploring logs:
 ```bash
-mlp file mattermost.log --interactive
+lamp file mattermost.log --interactive
 ```
 
 Analyze logs using Claude AI:
 ```bash
 # Using command line flag
-mlp file mattermost.log --ai-analyze --api-key YOUR_API_KEY
+lamp file mattermost.log --ai-analyze --api-key YOUR_API_KEY
 
 # Using environment variable
 export CLAUDE_API_KEY=YOUR_API_KEY
-mlp file mattermost.log --ai-analyze
+lamp file mattermost.log --ai-analyze
 
 # Specify maximum number of log entries to analyze
-mlp file mattermost.log --ai-analyze --max-entries 200
+lamp file mattermost.log --ai-analyze --max-entries 200
 
 # Provide a problem statement to guide the analysis
-mlp file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
+lamp file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
 ```
 
 Analyze support packet logs using Claude AI:
 ```bash
 # Using command line flag
-mlp support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
+lamp support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
 
 # Using environment variable
 export CLAUDE_API_KEY=YOUR_API_KEY
-mlp support-packet mattermost_support_packet.zip --ai-analyze
+lamp support-packet mattermost_support_packet.zip --ai-analyze
 ```
 
 ## Output Format
