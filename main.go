@@ -10,7 +10,6 @@ import (
 
 var (
 	// Global flags
-	verbose        bool
 	searchTerm     string
 	regexSearch    string
 	levelFilter    string
@@ -29,6 +28,7 @@ var (
 	problem        string
 	thinkingBudget int
 	interactive    bool
+	verbose        bool
 
 	// Global logger
 	logger *slog.Logger
@@ -135,7 +135,6 @@ func init() {
 	// Add shared flags to both subcommands
 	commands := []*cobra.Command{fileCmd, supportPacketCmd}
 	for _, cmd := range commands {
-		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
 		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
@@ -154,6 +153,7 @@ func init() {
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
 		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
+		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {

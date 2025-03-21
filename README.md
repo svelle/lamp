@@ -64,6 +64,7 @@ mlp <command> [flags]
 - `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
 - `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
 - `--interactive`: Launch interactive TUI mode for exploring logs
+- `--verbose`: Enable debug level logging output
 - `--help`: Show help information for any command
 
 ### Shell Completion
@@ -275,3 +276,13 @@ You can also provide a problem statement with the `--problem` flag to help guide
 ## License
 
 [MIT License](LICENSE)
+
+## Logging
+
+MLP uses structured logging for its output. By default, it logs at the INFO level. You can enable more detailed DEBUG level logging by using the `--verbose` flag:
+
+```bash
+mlp file logfile.txt --verbose
+```
+
+This will show additional debug information during execution, which can be helpful for troubleshooting or understanding the tool's behavior in more detail.
