@@ -159,7 +159,7 @@ lamp file mattermost.log --analyze --output analysis_report.txt
 
 Show version information:
 ```bash
-mlp version
+lamp version
 ```
 
 Launch interactive TUI mode for exploring logs:
@@ -297,7 +297,7 @@ You can also provide a problem statement with the `--problem` flag to help guide
 
 ## Logging
 
-MLP uses structured logging for its output. By default, it logs at the INFO level. You can modify the logging level using these flags:
+`lamp` uses structured logging for its output. By default, it logs at the INFO level. You can modify the logging level using these flags:
 
 - `--verbose`: Show detailed debug information
 - `--quiet`: Only show error messages
@@ -307,13 +307,13 @@ These flags are mutually exclusive - if both are provided, `--quiet` takes prece
 Examples:
 ```bash
 # Default behavior - show info and error messages
-mlp file logfile.txt
+lamp file logfile.txt
 
 # Show detailed debug information
-mlp file logfile.txt --verbose
+lamp file logfile.txt --verbose
 
 # Only show errors
-mlp file logfile.txt --quiet
+lamp file logfile.txt --quiet
 ```
 ## License
 
