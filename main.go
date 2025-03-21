@@ -29,6 +29,7 @@ var (
 	thinkingBudget int
 	interactive    bool
 	verbose        bool
+	quiet          bool
 
 	// Global logger
 	logger *slog.Logger
@@ -108,9 +109,12 @@ func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func
 }
 
 func initLogger() {
-	// Set log level based on verbose flag
+	// Set log level based on flags
 	logLevel := slog.LevelInfo
-	if verbose {
+	switch {
+	case quiet:
+		logLevel = slog.LevelError
+	case verbose:
 		logLevel = slog.LevelDebug
 	}
 
@@ -154,6 +158,7 @@ func init() {
 		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
+		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -174,7 +179,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})

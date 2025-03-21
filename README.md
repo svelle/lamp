@@ -65,6 +65,7 @@ mlp <command> [flags]
 - `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
 - `--interactive`: Launch interactive TUI mode for exploring logs
 - `--verbose`: Enable debug level logging output
+- `--quiet`: Only output errors (suppresses info, warn, and debug messages)
 - `--help`: Show help information for any command
 
 ### Shell Completion
@@ -273,16 +274,26 @@ Note: When using AI analysis, a limited number of log entries are sent to the Cl
 
 You can also provide a problem statement with the `--problem` flag to help guide the AI analysis toward specific issues you're investigating.
 
+## Logging
+
+MLP uses structured logging for its output. By default, it logs at the INFO level. You can modify the logging level using these flags:
+
+- `--verbose`: Show detailed debug information
+- `--quiet`: Only show error messages
+
+These flags are mutually exclusive - if both are provided, `--quiet` takes precedence.
+
+Examples:
+```bash
+# Default behavior - show info and error messages
+mlp file logfile.txt
+
+# Show detailed debug information
+mlp file logfile.txt --verbose
+
+# Only show errors
+mlp file logfile.txt --quiet
+```
 ## License
 
 [MIT License](LICENSE)
-
-## Logging
-
-MLP uses structured logging for its output. By default, it logs at the INFO level. You can enable more detailed DEBUG level logging by using the `--verbose` flag:
-
-```bash
-mlp file logfile.txt --verbose
-```
-
-This will show additional debug information during execution, which can be helpful for troubleshooting or understanding the tool's behavior in more detail.
