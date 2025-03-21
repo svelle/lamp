@@ -44,6 +44,7 @@ mlp <command> [flags]
 
 - `file <path>`: Parse a single Mattermost log file
 - `support-packet <path>`: Parse a Mattermost support packet zip file
+- `version`: Print version and build information
 - `completion`: Generate shell completion scripts
 - `help`: Help about any command
 
@@ -139,6 +140,11 @@ mlp file mattermost.log --csv logs_export.csv
 Save output to a file:
 ```bash
 mlp file mattermost.log --analyze --output analysis_report.txt
+```
+
+Show version information:
+```bash
+mlp version
 ```
 
 Launch interactive TUI mode for exploring logs:
