@@ -264,10 +264,12 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 	for _, hour := range analysis.BusiestHours {
 		hourNum := 0
 		if _, err := fmt.Sscanf(hour.Item, "%d", &hourNum); err != nil {
+			logger.Debug("Invalid hour format in activity analysis", "hour", hour.Item, "error", err)
 			// Skip invalid hour entries
 			continue
 		}
 		if hourNum < 0 || hourNum >= 24 {
+			logger.Debug("Hour outside valid range", "hour", hourNum)
 			// Skip hours outside valid range
 			continue
 		}
