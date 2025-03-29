@@ -6,7 +6,9 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"sort"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -71,6 +73,65 @@ var fileCmd = &cobra.Command{
 		}
 
 		return processLogs(logs)
+	},
+}
+
+var filesCmd = &cobra.Command{
+	Use:   "files [paths...]",
+	Short: "Parse multiple Mattermost log files",
+	Args:  cobra.MinimumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var allLogs []LogEntry
+
+		// Create progress bar for file processing
+		bar := progressbar.NewOptions(len(args),
+			progressbar.OptionEnableColorCodes(true),
+			progressbar.OptionSetWidth(40),
+			progressbar.OptionShowCount(),
+			progressbar.OptionSetDescription("[cyan]Processing log files[reset]"),
+			progressbar.OptionSetTheme(progressbar.Theme{
+				Saucer:        "[green]=[reset]",
+				SaucerHead:    "[green]>[reset]",
+				SaucerPadding: " ",
+				BarStart:      "[",
+				BarEnd:        "]",
+			}))
+
+		// Process each file
+		for _, filePath := range args {
+			if err := bar.Add(1); err != nil {
+				logger.Warn("Error updating progress bar", "error", err)
+			}
+
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				logger.Warn("File does not exist, skipping", "file", filePath)
+				continue
+			}
+
+			logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+			if err != nil {
+				logger.Warn("Error parsing log file, skipping", "file", filePath, "error", err)
+				continue
+			}
+
+			allLogs = append(allLogs, logs...)
+			logger.Debug("Processed file", "file", filePath, "entries", len(logs))
+		}
+
+		if len(allLogs) == 0 {
+			return fmt.Errorf("no valid log entries found in any of the provided files")
+		}
+
+		// Sort all logs by timestamp
+		sort.Slice(allLogs, func(i, j int) bool {
+			return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
+		})
+
+		logger.Info("Finished processing files", "total_files", len(args), "total_entries", len(allLogs))
+		return processLogs(allLogs)
 	},
 }
 
@@ -182,11 +243,12 @@ func init() {
 
 	// Add subcommands to root command
 	rootCmd.AddCommand(fileCmd)
+	rootCmd.AddCommand(filesCmd)
 	rootCmd.AddCommand(supportPacketCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	// Add shared flags to both subcommands
-	commands := []*cobra.Command{fileCmd, supportPacketCmd}
+	// Add shared flags to all file processing subcommands
+	commands := []*cobra.Command{fileCmd, filesCmd, supportPacketCmd}
 	for _, cmd := range commands {
 		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
 		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
