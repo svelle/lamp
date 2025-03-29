@@ -58,6 +58,7 @@ lamp <command> [flags]
 ### Commands
 
 - `file <path>`: Parse a single Mattermost log file
+- `files <paths...>`: Parse multiple Mattermost log files
 - `support-packet <path>`: Parse a Mattermost support packet zip file
 - `version`: Print version and build information
 - `completion`: Generate shell completion scripts
@@ -110,6 +111,11 @@ After enabling completion, you can use:
 Parse a single log file:
 ```bash
 lamp file mattermost.log
+```
+
+Parse multiple log files:
+```bash
+lamp files mattermost.log mattermost2.log mattermost3.log
 ```
 
 Parse a support packet:
