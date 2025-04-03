@@ -192,8 +192,8 @@ func init() {
 		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
 		cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
-		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02T15:04:05)")
-		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02T15:04:05)")
+		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
+		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
 		cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
@@ -237,7 +237,7 @@ func init() {
 		// Add time format hint completion
 		for _, flag := range []string{"start", "end"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-				return []string{"2006-01-02T15:04:05"}, cobra.ShellCompDirectiveNoFileComp
+				return []string{"2006-01-02 15:04:05.000"}, cobra.ShellCompDirectiveNoFileComp
 			})
 		}
 	}

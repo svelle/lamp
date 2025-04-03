@@ -69,8 +69,8 @@ lamp <command> [flags]
 - `--regex <pattern>`: Regular expression pattern to filter logs
 - `--level <level>`: Filter logs by level (info, error, debug, etc.)
 - `--user <username>`: Filter logs by username
-- `--start <time>`: Filter logs after this time (format: 2006-01-02T15:04:05)
-- `--end <time>`: Filter logs before this time (format: 2006-01-02T15:04:05)
+- `--start <time>`: Filter logs after this time (format: 2006-01-02 15:04:05.000)
+- `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
 - `--json`: Output in JSON format
 - `--csv <path>`: Export logs to CSV file at specified path
 - `--output <path>`: Save output to file instead of stdout

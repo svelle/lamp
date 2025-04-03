@@ -45,14 +45,14 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 	// Parse time range filters if provided
 	var startTime, endTime time.Time
 	if startTimeStr != "" {
-		parsedTime, parseErr := time.Parse("2006-01-02T15:04:05", startTimeStr)
+		parsedTime, parseErr := time.Parse("2006-01-02 15:04:05.000", startTimeStr)
 		if parseErr != nil {
 			return nil, fmt.Errorf("invalid start time format: %v", parseErr)
 		}
 		startTime = parsedTime
 	}
 	if endTimeStr != "" {
-		parsedTime, parseErr := time.Parse("2006-01-02T15:04:05", endTimeStr)
+		parsedTime, parseErr := time.Parse("2006-01-02 15:04:05.000", endTimeStr)
 		if parseErr != nil {
 			return nil, fmt.Errorf("invalid end time format: %v", parseErr)
 		}
