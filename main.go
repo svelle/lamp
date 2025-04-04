@@ -6,6 +6,7 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -332,7 +333,24 @@ func processLogs(logs []LogEntry) error {
 				return fmt.Errorf("Claude API key is required for AI analysis")
 			}
 		}
-		analyzeWithClaude(logs, apiKeyValue, maxEntries, problem, thinkingBudget)
+		
+		// If trim was used, ask if user wants to send all remaining lines
+		entriesForAnalysis := maxEntries
+		if trim {
+			fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
+			var response string
+			_, err := fmt.Scanln(&response)
+			if err != nil {
+				// Default to 'no' if there's an error with input
+				response = "n"
+			}
+			
+			if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+				entriesForAnalysis = len(logs)
+			}
+		}
+		
+		analyzeWithClaude(logs, apiKeyValue, entriesForAnalysis, problem, thinkingBudget)
 	case analyze:
 		analyzeAndDisplayStats(logs, output, !trim)
 	case jsonOutput:
