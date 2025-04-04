@@ -313,7 +313,11 @@ func processLogs(logs []LogEntry) error {
 		if trim {
 			fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
 			var response string
-			fmt.Scanln(&response)
+			_, err := fmt.Scanln(&response)
+			if err != nil {
+				// Default to 'no' if there's an error with input
+				response = "n"
+			}
 			
 			if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
 				entriesForAnalysis = len(logs)
