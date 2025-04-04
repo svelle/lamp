@@ -19,6 +19,10 @@ type LogEntry struct {
 	Message        string            `json:"message"`
 	Source         string            `json:"source,omitempty"`
 	User           string            `json:"user,omitempty"`
+	LogSource      string            `json:"log_source,omitempty"` // For notifications: "notifications"
+	AckID          string            `json:"ack_id,omitempty"`     // For notifications: notification ID
+	Type           string            `json:"type,omitempty"`       // For notifications: message type
+	Status         string            `json:"status,omitempty"`     // For notifications: delivery status
 	Extras         map[string]string `json:"extras,omitempty"`
 	DuplicateCount int               `json:"duplicate_count,omitempty"`
 }
@@ -45,14 +49,14 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 	// Parse time range filters if provided
 	var startTime, endTime time.Time
 	if startTimeStr != "" {
-		parsedTime, parseErr := time.Parse("2006-01-02T15:04:05", startTimeStr)
+		parsedTime, parseErr := time.Parse("2006-01-02 15:04:05.000", startTimeStr)
 		if parseErr != nil {
 			return nil, fmt.Errorf("invalid start time format: %v", parseErr)
 		}
 		startTime = parsedTime
 	}
 	if endTimeStr != "" {
-		parsedTime, parseErr := time.Parse("2006-01-02T15:04:05", endTimeStr)
+		parsedTime, parseErr := time.Parse("2006-01-02 15:04:05.000", endTimeStr)
 		if parseErr != nil {
 			return nil, fmt.Errorf("invalid end time format: %v", parseErr)
 		}
@@ -183,6 +187,10 @@ func parseJSONLine(line string) (LogEntry, error) {
 		Msg       string `json:"msg"`
 		Caller    string `json:"caller,omitempty"`
 		UserID    string `json:"user_id,omitempty"`
+		LogSource string `json:"logSource,omitempty"`
+		AckID     string `json:"ackId,omitempty"`
+		Type      string `json:"type,omitempty"`
+		Status    string `json:"status,omitempty"`
 	}
 	var jsonEntry JSONLogEntry
 
@@ -202,7 +210,8 @@ func parseJSONLine(line string) (LogEntry, error) {
 	}
 	for k, v := range extra {
 		// Skip fields we already handle
-		if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" {
+		if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" || 
+		   k == "logSource" || k == "ackId" || k == "type" || k == "status" {
 			continue
 		}
 
@@ -232,6 +241,12 @@ func parseJSONLine(line string) (LogEntry, error) {
 	entry.Message = jsonEntry.Msg
 	entry.User = jsonEntry.UserID
 	entry.Source = jsonEntry.Caller
+	
+	// Set notification-specific fields if present
+	entry.LogSource = jsonEntry.LogSource
+	entry.AckID = jsonEntry.AckID
+	entry.Type = jsonEntry.Type
+	entry.Status = jsonEntry.Status
 
 	return entry, nil
 }

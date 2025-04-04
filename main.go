@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"sort"
+	"strings"
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
@@ -126,6 +127,30 @@ var fileCmd = &cobra.Command{
 	},
 }
 
+var notificationCmd = &cobra.Command{
+	Use:   "notification [path]",
+	Short: "Parse a Mattermost notification log file",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return fmt.Errorf("notification log file '%s' does not exist", filePath)
+		}
+
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			return fmt.Errorf("error parsing notification log file: %v", err)
+		}
+
+		return processLogs(logs)
+	},
+}
 
 var supportPacketCmd = &cobra.Command{
 	Use:   "support-packet [path]",
@@ -235,18 +260,19 @@ func init() {
 
 	// Add subcommands to root command
 	rootCmd.AddCommand(fileCmd)
+	rootCmd.AddCommand(notificationCmd)
 	rootCmd.AddCommand(supportPacketCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	// Add shared flags to all file processing subcommands
-	commands := []*cobra.Command{fileCmd, supportPacketCmd}
+	commands := []*cobra.Command{fileCmd, notificationCmd, supportPacketCmd}
 	for _, cmd := range commands {
 		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
 		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
 		cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
-		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02T15:04:05)")
-		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02T15:04:05)")
+		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
+		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
 		cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
@@ -290,7 +316,7 @@ func init() {
 		// Add time format hint completion
 		for _, flag := range []string{"start", "end"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-				return []string{"2006-01-02T15:04:05"}, cobra.ShellCompDirectiveNoFileComp
+				return []string{"2006-01-02 15:04:05.000"}, cobra.ShellCompDirectiveNoFileComp
 			})
 		}
 	}
@@ -359,7 +385,24 @@ func processLogs(logs []LogEntry) error {
 				return fmt.Errorf("Claude API key is required for AI analysis")
 			}
 		}
-		analyzeWithClaude(logs, apiKeyValue, maxEntries, problem, thinkingBudget)
+		
+		// If trim was used, ask if user wants to send all remaining lines
+		entriesForAnalysis := maxEntries
+		if trim {
+			fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
+			var response string
+			_, err := fmt.Scanln(&response)
+			if err != nil {
+				// Default to 'no' if there's an error with input
+				response = "n"
+			}
+			
+			if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+				entriesForAnalysis = len(logs)
+			}
+		}
+		
+		analyzeWithClaude(logs, apiKeyValue, entriesForAnalysis, problem, thinkingBudget)
 	case analyze:
 		analyzeAndDisplayStats(logs, output, !trim)
 	case jsonOutput:

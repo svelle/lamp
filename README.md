@@ -69,7 +69,7 @@ lamp <command> [flags]
 - `--analyze`: Analyze logs and show statistics
 - `--api-key <key>`: Claude API key for AI analysis (or set CLAUDE_API_KEY environment variable)
 - `--csv <path>`: Export logs to CSV file at specified path
-- `--end <time>`: Filter logs before this time (format: 2006-01-02T15:04:05)
+- `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
 - `--help`: Show help information for any command
 - `--interactive`: Launch interactive TUI mode for exploring logs
 - `--json`: Output in JSON format
@@ -80,7 +80,7 @@ lamp <command> [flags]
 - `--quiet`: Only output errors (suppresses info, warn, and debug messages)
 - `--regex <pattern>`: Regular expression pattern to filter logs
 - `--search <term>`: Search term to filter logs
-- `--start <time>`: Filter logs after this time (format: 2006-01-02T15:04:05)
+- `--start <time>`: Filter logs after this time (format: 2006-01-02 15:04:05.000)
 - `--thinking-budget <tokens>`: Token budget for Claude's extended thinking mode
 - `--trim`: Remove entries with duplicate information
 - `--trim-json <path>`: Write deduplicated logs to a JSON file at specified path
