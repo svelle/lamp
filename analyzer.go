@@ -18,6 +18,11 @@ type LogAnalysis struct {
 	TopErrorMessages    []CountedItem
 	ErrorRate           float64
 	BusiestHours        []CountedItem
+	ActivityByDayOfWeek []CountedItem
+	ActivityByMonth     []CountedItem
+	HourLevelCounts     map[int]map[string]int    // Hour -> Level -> Count
+	DayLevelCounts      map[string]map[string]int // Day -> Level -> Count
+	MonthLevelCounts    map[string]map[string]int // Month -> Level -> Count
 	CommonPatterns      []CountedItem
 	NotificationTypes   []CountedItem   // For notification logs: message, clear, etc.
 	NotificationStatuses []CountedItem  // For notification logs: Sent, Received, etc.
@@ -69,8 +74,11 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 // analyzeLogs performs analysis on log entries
 func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	analysis := LogAnalysis{
-		TotalEntries: len(logs),
-		LevelCounts:  make(map[string]int),
+		TotalEntries:     len(logs),
+		LevelCounts:      make(map[string]int),
+		HourLevelCounts:  make(map[int]map[string]int),
+		DayLevelCounts:   make(map[string]map[string]int),
+		MonthLevelCounts: make(map[string]map[string]int),
 	}
 
 	// Initialize maps for counting
@@ -78,6 +86,8 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	userCounts := make(map[string]int)
 	errorMsgCounts := make(map[string]int)
 	hourCounts := make(map[int]int)
+	dayOfWeekCounts := make(map[string]int)
+	monthCounts := make(map[string]int)
 	patternCounts := make(map[string]int)
 	notificationTypeCounts := make(map[string]int)
 	notificationStatusCounts := make(map[string]int)
@@ -108,7 +118,8 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 		}
 
 		// Count log levels
-		analysis.LevelCounts[strings.ToUpper(log.Level)] += count
+		level := strings.ToUpper(log.Level)
+		analysis.LevelCounts[level] += count
 
 		// Count sources
 		if log.Source != "" {
@@ -133,6 +144,32 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 		// Count activity by hour
 		hour := log.Timestamp.Hour()
 		hourCounts[hour] += count
+		
+		// Track level distribution by hour
+		if _, exists := analysis.HourLevelCounts[hour]; !exists {
+			analysis.HourLevelCounts[hour] = make(map[string]int)
+		}
+		analysis.HourLevelCounts[hour][level] += count
+		
+		// Count activity by day of week
+		dayOfWeek := log.Timestamp.Weekday().String()
+		dayOfWeekCounts[dayOfWeek] += count
+		
+		// Track level distribution by day of week
+		if _, exists := analysis.DayLevelCounts[dayOfWeek]; !exists {
+			analysis.DayLevelCounts[dayOfWeek] = make(map[string]int)
+		}
+		analysis.DayLevelCounts[dayOfWeek][level] += count
+		
+		// Count activity by month
+		month := log.Timestamp.Month().String()
+		monthCounts[month] += count
+		
+		// Track level distribution by month
+		if _, exists := analysis.MonthLevelCounts[month]; !exists {
+			analysis.MonthLevelCounts[month] = make(map[string]int)
+		}
+		analysis.MonthLevelCounts[month][level] += count
 
 		// Identify common patterns in messages
 		words := strings.Fields(log.Message)
@@ -173,6 +210,10 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 		hourCountsStr[fmt.Sprintf("%d", hour)] = count
 	}
 	analysis.BusiestHours = mapToSortedSlice(hourCountsStr, 24)
+	
+	// Add day of week and month activity
+	analysis.ActivityByDayOfWeek = mapToSortedSlice(dayOfWeekCounts, 7)
+	analysis.ActivityByMonth = mapToSortedSlice(monthCounts, 12)
 
 	analysis.CommonPatterns = mapToSortedSlice(patternCounts, 10)
 	
@@ -201,6 +242,47 @@ func mapToSortedSlice(m map[string]int, limit int) []CountedItem {
 	}
 
 	return items
+}
+
+// getDominantLevelColor returns the color of the most common log level for a period
+func getDominantLevelColor(levelCounts map[string]int, totalCount int) string {
+	if totalCount == 0 {
+		return "\033[0m" // Reset color if no entries
+	}
+	
+	// Define log level colors
+	levelColors := map[string]string{
+		"ERROR":    "\033[31m", // Red
+		"FATAL":    "\033[31m", // Red
+		"CRITICAL": "\033[31m", // Red
+		"WARN":     "\033[33m", // Yellow
+		"WARNING":  "\033[33m", // Yellow
+		"INFO":     "\033[32m", // Green
+		"DEBUG":    "\033[34m", // Blue
+	}
+	
+	// Find the dominant level (highest percentage)
+	var dominantLevel string
+	highestCount := 0
+	
+	for level, count := range levelCounts {
+		if count > highestCount {
+			highestCount = count
+			dominantLevel = level
+		}
+	}
+	
+	// Calculate percentage of dominant level
+	percentage := float64(highestCount) / float64(totalCount) * 100
+	
+	// Only color if the dominant level represents at least 50% of entries
+	if percentage >= 50 {
+		if color, exists := levelColors[dominantLevel]; exists {
+			return color
+		}
+	}
+	
+	return "\033[0m" // Default to reset color
 }
 
 // displayAnalysis prints the analysis results
@@ -299,9 +381,76 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		count := hourMap[hour]
 		barLength := int(float64(count) / float64(maxCount) * 30)
 		bar := strings.Repeat("█", barLength)
-		fmt.Fprintf(writer, "%02d:00: %s (%d)\n", hour, bar, count)
+		
+		// Get dominant log level color for this hour
+		levelColor := getDominantLevelColor(analysis.HourLevelCounts[hour], count)
+		
+		fmt.Fprintf(writer, "%02d:00: %s%s%s (%d)\n", hour, levelColor, bar, resetColor, count)
 	}
 	fmt.Fprintln(writer)
+	
+	// Activity by day of week (if time range spans multiple days)
+	timeSpan := analysis.TimeRange.End.Sub(analysis.TimeRange.Start)
+	if timeSpan.Hours() >= 24 && len(analysis.ActivityByDayOfWeek) > 0 {
+		fmt.Fprintf(writer, "%sActivity by Day of Week:%s\n", subHeaderColor, resetColor)
+		// Find the max count for scaling
+		maxCount = 0
+		for _, day := range analysis.ActivityByDayOfWeek {
+			if day.Count > maxCount {
+				maxCount = day.Count
+			}
+		}
+		
+		// Create a map for easier day lookup
+		dayMap := make(map[string]int)
+		for _, day := range analysis.ActivityByDayOfWeek {
+			dayMap[day.Item] = day.Count
+		}
+		
+		// Display days with bar chart (in order from Sunday to Saturday)
+		for _, day := range []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"} {
+			count := dayMap[day]
+			barLength := int(float64(count) / float64(maxCount) * 30)
+			bar := strings.Repeat("█", barLength)
+			
+			// Get dominant log level color for this day
+			levelColor := getDominantLevelColor(analysis.DayLevelCounts[day], count)
+			
+			fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", day, levelColor, bar, resetColor, count)
+		}
+		fmt.Fprintln(writer)
+	}
+	
+	// Activity by month (if time range spans multiple months)
+	if timeSpan.Hours() >= 24*30 && len(analysis.ActivityByMonth) > 0 {
+		fmt.Fprintf(writer, "%sActivity by Month:%s\n", subHeaderColor, resetColor)
+		// Find the max count for scaling
+		maxCount = 0
+		for _, month := range analysis.ActivityByMonth {
+			if month.Count > maxCount {
+				maxCount = month.Count
+			}
+		}
+		
+		// Create a map for easier month lookup
+		monthMap := make(map[string]int)
+		for _, month := range analysis.ActivityByMonth {
+			monthMap[month.Item] = month.Count
+		}
+		
+		// Display months with bar chart (in calendar order)
+		for _, month := range []string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"} {
+			count := monthMap[month]
+			barLength := int(float64(count) / float64(maxCount) * 30)
+			bar := strings.Repeat("█", barLength)
+			
+			// Get dominant log level color for this month
+			levelColor := getDominantLevelColor(analysis.MonthLevelCounts[month], count)
+			
+			fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", month, levelColor, bar, resetColor, count)
+		}
+		fmt.Fprintln(writer)
+	}
 
 	// Common message patterns
 	fmt.Fprintf(writer, "%sCommon Message Patterns:%s\n", subHeaderColor, resetColor)

@@ -258,4 +258,78 @@ func TestMultiFileCommand(t *testing.T) {
 		            strings.Contains(output, "3"), 
 		            "Output should indicate duplicated entries")
 	})
+	
+	t.Run("analyze command", func(t *testing.T) {
+		// Create a file with logs spanning multiple days
+		analyzeFile := filepath.Join(tempDir, "analyze.log")
+		f, err := os.Create(analyzeFile)
+		require.NoError(t, err)
+		
+		// Write logs with different timestamps, days, and levels
+		logs := []string{
+			`info [2025-01-01 10:00:00.000 Z] System started caller="system/init.go:42"`,
+			`info [2025-01-01 14:30:00.000 Z] User login caller="auth/login.go:55" user_id="user123"`,
+			`error [2025-01-01 16:05:00.000 Z] Database connection failed caller="db/conn.go:77"`,
+			`warn [2025-01-02 09:15:00.000 Z] High CPU usage caller="monitor/cpu.go:30"`,
+			`info [2025-01-02 11:20:00.000 Z] Backup started caller="backup/scheduler.go:42"`,
+			`debug [2025-01-03 10:45:00.000 Z] Cache invalidated caller="cache/manager.go:55"`,
+			`error [2025-01-03 15:30:00.000 Z] Failed to send email caller="email/sender.go:87"`,
+		}
+		
+		for _, line := range logs {
+			_, err = f.WriteString(line + "\n")
+			require.NoError(t, err)
+		}
+		f.Close()
+		
+		// Store original stdout
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+		
+		// Set up command with analyze flag
+		cmd := &cobra.Command{}
+		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
+		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
+		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze log patterns")
+		
+		// Enable analysis
+		analyze = true
+		
+		// Call the RunE function from fileCmd
+		err = fileCmd.RunE(cmd, []string{analyzeFile})
+		require.NoError(t, err)
+		
+		// Restore stdout and reset analyze flag
+		w.Close()
+		os.Stdout = oldStdout
+		analyze = false // Reset for other tests
+		
+		var buf bytes.Buffer
+		_, err = buf.ReadFrom(r)
+		require.NoError(t, err)
+		output := buf.String()
+		
+		// Test for presence of analysis sections
+		assert.Contains(t, output, "=== MATTERMOST LOG ANALYSIS ===")
+		assert.Contains(t, output, "Basic Statistics:")
+		assert.Contains(t, output, "Log Level Distribution:")
+		assert.Contains(t, output, "Activity by Hour:")
+		assert.Contains(t, output, "Activity by Day of Week:")
+		
+		// Check for specific data
+		assert.Contains(t, output, "Total Log Entries: 7")
+		assert.Contains(t, output, "ERROR")
+		assert.Contains(t, output, "INFO")
+		
+		// Check for time range information
+		assert.Contains(t, output, "2025-01-01")
+		assert.Contains(t, output, "2025-01-03")
+		
+		// Check for day of week information
+		assert.Contains(t, output, "Wednesday")
+		assert.Contains(t, output, "Thursday")
+		assert.Contains(t, output, "Friday")
+	})
 }
