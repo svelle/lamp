@@ -90,6 +90,23 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 		if log.Source != "" {
 			fmt.Fprintf(writer, "  %sSource:%s %s\n", colorPurple, colorReset, log.Source)
 		}
+		
+		// Print notification-specific fields if available
+		if log.LogSource == "notifications" {
+			fmt.Fprintf(writer, "  %sLog Source:%s %s\n", colorPurple, colorReset, log.LogSource)
+			
+			if log.AckID != "" {
+				fmt.Fprintf(writer, "  %sAck ID:%s %s\n", colorPurple, colorReset, log.AckID)
+			}
+			
+			if log.Type != "" {
+				fmt.Fprintf(writer, "  %sType:%s %s\n", colorPurple, colorReset, log.Type)
+			}
+			
+			if log.Status != "" {
+				fmt.Fprintf(writer, "  %sStatus:%s %s\n", colorPurple, colorReset, log.Status)
+			}
+		}
 
 		// Print extras if available
 		for key, value := range log.Extras {
@@ -132,7 +149,7 @@ func exportToCSV(logs []LogEntry, filePath string) error {
 	defer writer.Flush()
 
 	// Write header
-	header := []string{"Timestamp", "Level", "Source", "Message", "User", "Extras"}
+	header := []string{"Timestamp", "Level", "Source", "Message", "User", "LogSource", "AckID", "Type", "Status", "Extras"}
 	if err := writer.Write(header); err != nil {
 		return err
 	}
@@ -145,6 +162,10 @@ func exportToCSV(logs []LogEntry, filePath string) error {
 			log.Source,
 			log.Message,
 			log.User,
+			log.LogSource,
+			log.AckID,
+			log.Type,
+			log.Status,
 			log.ExtrasToString(),
 		}
 		if err := writer.Write(row); err != nil {

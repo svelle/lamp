@@ -74,6 +74,31 @@ var fileCmd = &cobra.Command{
 	},
 }
 
+var notificationCmd = &cobra.Command{
+	Use:   "notification [path]",
+	Short: "Parse a Mattermost notification log file",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return fmt.Errorf("notification log file '%s' does not exist", filePath)
+		}
+
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			return fmt.Errorf("error parsing notification log file: %v", err)
+		}
+
+		return processLogs(logs)
+	},
+}
+
 var supportPacketCmd = &cobra.Command{
 	Use:   "support-packet [path]",
 	Short: "Parse a Mattermost support packet zip file",
@@ -182,11 +207,12 @@ func init() {
 
 	// Add subcommands to root command
 	rootCmd.AddCommand(fileCmd)
+	rootCmd.AddCommand(notificationCmd)
 	rootCmd.AddCommand(supportPacketCmd)
 	rootCmd.AddCommand(versionCmd)
 
 	// Add shared flags to both subcommands
-	commands := []*cobra.Command{fileCmd, supportPacketCmd}
+	commands := []*cobra.Command{fileCmd, notificationCmd, supportPacketCmd}
 	for _, cmd := range commands {
 		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
 		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
