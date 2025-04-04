@@ -6,8 +6,10 @@ import (
 	"os"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
 
@@ -51,27 +53,77 @@ and AI-powered insights using Claude AI.`,
 }
 
 var fileCmd = &cobra.Command{
-	Use:   "file [path]",
-	Short: "Parse a single Mattermost log file",
-	Args:  cobra.ExactArgs(1),
+	Use:   "file [path...]",
+	Short: "Parse one or more Mattermost log files",
+	Args:  cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		if len(args) != 0 {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		filePath := args[0]
-		if _, err := os.Stat(filePath); os.IsNotExist(err) {
-			return fmt.Errorf("file '%s' does not exist", filePath)
-		}
+		if len(args) == 1 {
+			// Single file mode
+			filePath := args[0]
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				return fmt.Errorf("file '%s' does not exist", filePath)
+			}
 
-		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
-		if err != nil {
-			return fmt.Errorf("error parsing log file: %v", err)
-		}
+			logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+			if err != nil {
+				return fmt.Errorf("error parsing log file: %v", err)
+			}
 
-		return processLogs(logs)
+			return processLogs(logs)
+		} else {
+			// Multiple files mode
+			var allLogs []LogEntry
+
+			// Create progress bar for file processing
+			bar := progressbar.NewOptions(len(args),
+				progressbar.OptionEnableColorCodes(true),
+				progressbar.OptionSetWidth(40),
+				progressbar.OptionShowCount(),
+				progressbar.OptionSetDescription("[cyan]Processing log files[reset]"),
+				progressbar.OptionSetTheme(progressbar.Theme{
+					Saucer:        "[green]=[reset]",
+					SaucerHead:    "[green]>[reset]",
+					SaucerPadding: " ",
+					BarStart:      "[",
+					BarEnd:        "]",
+				}))
+
+			// Process each file
+			for _, filePath := range args {
+				if err := bar.Add(1); err != nil {
+					logger.Warn("Error updating progress bar", "error", err)
+				}
+
+				if _, err := os.Stat(filePath); os.IsNotExist(err) {
+					logger.Warn("File does not exist, skipping", "file", filePath)
+					continue
+				}
+
+				logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+				if err != nil {
+					logger.Warn("Error parsing log file, skipping", "file", filePath, "error", err)
+					continue
+				}
+
+				allLogs = append(allLogs, logs...)
+				logger.Debug("Processed file", "file", filePath, "entries", len(logs))
+			}
+
+			if len(allLogs) == 0 {
+				return fmt.Errorf("no valid log entries found in any of the provided files")
+			}
+
+			// Sort all logs by timestamp
+			sort.Slice(allLogs, func(i, j int) bool {
+				return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
+			})
+
+			logger.Info("Finished processing files", "total_files", len(args), "total_entries", len(allLogs))
+			return processLogs(allLogs)
+		}
 	},
 }
 
@@ -212,7 +264,7 @@ func init() {
 	rootCmd.AddCommand(supportPacketCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	// Add shared flags to both subcommands
+	// Add shared flags to all file processing subcommands
 	commands := []*cobra.Command{fileCmd, notificationCmd, supportPacketCmd}
 	for _, cmd := range commands {
 		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")

@@ -57,7 +57,7 @@ lamp <command> [flags]
 
 ### Commands
 
-- `file <path>`: Parse a single Mattermost log file
+- `file <path...>`: Parse one or more Mattermost log files
 - `support-packet <path>`: Parse a Mattermost support packet zip file
 - `version`: Print version and build information
 - `completion`: Generate shell completion scripts
@@ -65,24 +65,27 @@ lamp <command> [flags]
 
 ### Options
 
-- `--search <term>`: Search term to filter logs
-- `--regex <pattern>`: Regular expression pattern to filter logs
-- `--level <level>`: Filter logs by level (info, error, debug, etc.)
-- `--user <username>`: Filter logs by username
-- `--start <time>`: Filter logs after this time (format: 2006-01-02 15:04:05.000)
-- `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
-- `--json`: Output in JSON format
-- `--csv <path>`: Export logs to CSV file at specified path
-- `--output <path>`: Save output to file instead of stdout
-- `--analyze`: Analyze logs and show statistics
 - `--ai-analyze`: Analyze logs using Claude AI
+- `--analyze`: Analyze logs and show statistics
 - `--api-key <key>`: Claude API key for AI analysis (or set CLAUDE_API_KEY environment variable)
-- `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
-- `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
-- `--interactive`: Launch interactive TUI mode for exploring logs
-- `--verbose`: Enable debug level logging output
-- `--quiet`: Only output errors (suppresses info, warn, and debug messages)
+- `--csv <path>`: Export logs to CSV file at specified path
+- `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
 - `--help`: Show help information for any command
+- `--interactive`: Launch interactive TUI mode for exploring logs
+- `--json`: Output in JSON format
+- `--level <level>`: Filter logs by level (info, error, debug, etc.)
+- `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
+- `--output <path>`: Save output to file instead of stdout
+- `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
+- `--quiet`: Only output errors (suppresses info, warn, and debug messages)
+- `--regex <pattern>`: Regular expression pattern to filter logs
+- `--search <term>`: Search term to filter logs
+- `--start <time>`: Filter logs after this time (format: 2006-01-02 15:04:05.000)
+- `--thinking-budget <tokens>`: Token budget for Claude's extended thinking mode
+- `--trim`: Remove entries with duplicate information
+- `--trim-json <path>`: Write deduplicated logs to a JSON file at specified path
+- `--user <username>`: Filter logs by username
+- `--verbose`: Enable debug level logging output
 
 ### Shell Completion
 
@@ -110,6 +113,11 @@ After enabling completion, you can use:
 Parse a single log file:
 ```bash
 lamp file mattermost.log
+```
+
+Parse multiple log files:
+```bash
+lamp file mattermost.log mattermost2.log mattermost3.log
 ```
 
 Parse a support packet:
