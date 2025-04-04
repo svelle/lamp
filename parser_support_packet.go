@@ -31,8 +31,10 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	for _, file := range reader.File {
 		// Check if it's a log file
 		if strings.HasSuffix(file.Name, "mattermost.log") ||
+			strings.HasSuffix(file.Name, "notifications.log") ||
 			strings.Contains(file.Name, "/logs/") ||
-			strings.Contains(file.Name, "\\logs\\") {
+			strings.Contains(file.Name, "\\logs\\") ||
+			strings.Contains(file.Name, "notification") {
 
 			// Extract the file
 			extractedPath := filepath.Join(tempDir, filepath.Base(file.Name))

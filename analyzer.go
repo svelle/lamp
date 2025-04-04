@@ -10,15 +10,17 @@ import (
 
 // LogAnalysis contains statistics and insights from log entries
 type LogAnalysis struct {
-	TotalEntries     int
-	TimeRange        TimeRange
-	LevelCounts      map[string]int
-	TopSources       []CountedItem
-	TopUsers         []CountedItem
-	TopErrorMessages []CountedItem
-	ErrorRate        float64
-	BusiestHours     []CountedItem
-	CommonPatterns   []CountedItem
+	TotalEntries        int
+	TimeRange           TimeRange
+	LevelCounts         map[string]int
+	TopSources          []CountedItem
+	TopUsers            []CountedItem
+	TopErrorMessages    []CountedItem
+	ErrorRate           float64
+	BusiestHours        []CountedItem
+	CommonPatterns      []CountedItem
+	NotificationTypes   []CountedItem   // For notification logs: message, clear, etc.
+	NotificationStatuses []CountedItem  // For notification logs: Sent, Received, etc.
 }
 
 // TimeRange represents the time span of analyzed logs
@@ -77,6 +79,8 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	errorMsgCounts := make(map[string]int)
 	hourCounts := make(map[int]int)
 	patternCounts := make(map[string]int)
+	notificationTypeCounts := make(map[string]int)
+	notificationStatusCounts := make(map[string]int)
 
 	// Set initial time range
 	if len(logs) > 0 {
@@ -139,6 +143,16 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 			}
 			patternCounts[pattern] += count
 		}
+		
+		// Count notification types and statuses if present
+		if log.LogSource == "notifications" {
+			if log.Type != "" {
+				notificationTypeCounts[log.Type] += count
+			}
+			if log.Status != "" {
+				notificationStatusCounts[log.Status] += count
+			}
+		}
 	}
 
 	// Calculate error rate
@@ -161,6 +175,10 @@ func analyzeLogs(logs []LogEntry, showDupes bool) LogAnalysis {
 	analysis.BusiestHours = mapToSortedSlice(hourCountsStr, 24)
 
 	analysis.CommonPatterns = mapToSortedSlice(patternCounts, 10)
+	
+	// Add notification-specific information if present
+	analysis.NotificationTypes = mapToSortedSlice(notificationTypeCounts, 10) 
+	analysis.NotificationStatuses = mapToSortedSlice(notificationStatusCounts, 10)
 
 	return analysis
 }
@@ -291,6 +309,29 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		if i < 5 {
 			fmt.Fprintf(writer, "%d. \"%s\" (%d occurrences)\n", i+1, pattern.Item, pattern.Count)
 		}
+	}
+	fmt.Fprintln(writer)
+	
+	// Notification statistics (if present)
+	if len(analysis.NotificationTypes) > 0 {
+		fmt.Fprintf(writer, "%sNotification Statistics:%s\n", subHeaderColor, resetColor)
+		
+		// Notification types
+		if len(analysis.NotificationTypes) > 0 {
+			fmt.Fprintf(writer, "Notification Types:\n")
+			for _, nt := range analysis.NotificationTypes {
+				fmt.Fprintf(writer, "  %s: %d\n", nt.Item, nt.Count)
+			}
+		}
+		
+		// Notification statuses
+		if len(analysis.NotificationStatuses) > 0 {
+			fmt.Fprintf(writer, "Notification Statuses:\n")
+			for _, ns := range analysis.NotificationStatuses {
+				fmt.Fprintf(writer, "  %s: %d\n", ns.Item, ns.Count)
+			}
+		}
+		fmt.Fprintln(writer)
 	}
 
 	fmt.Fprintf(writer, "\n%s=== END OF ANALYSIS ===%s\n\n", headerColor, resetColor)
