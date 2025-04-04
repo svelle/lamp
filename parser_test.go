@@ -1,6 +1,9 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
+	"sort"
 	"testing"
 	"time"
 
@@ -222,4 +225,181 @@ func mustParseTime(t *testing.T, s string) time.Time {
 	tme, err := time.Parse("2006-01-02 15:04:05.000 Z", s)
 	require.NoError(t, err)
 	return tme
+}
+
+func TestMultiFileLogProcessing(t *testing.T) {
+	// Initialize the logger for tests
+	initLogger()
+
+	// Create temporary directory for test log files
+	tempDir, err := os.MkdirTemp("", "lamp-test-")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	// Create test log files with different timestamps
+	logFiles := []struct {
+		name     string
+		contents []string
+	}{
+		{
+			name: "file1.log",
+			contents: []string{
+				`info [2025-01-01 10:00:00.000 Z] System started caller="system/init.go:42"`,
+				`error [2025-01-01 10:05:00.000 Z] Connection failed caller="network/conn.go:123" error="timeout"`,
+			},
+		},
+		{
+			name: "file2.log",
+			contents: []string{
+				`info [2025-01-01 10:02:30.000 Z] User login caller="auth/login.go:55" user_id="user123"`,
+				`debug [2025-01-01 10:07:45.000 Z] Cache hit caller="cache/store.go:78" key="session-key"`,
+			},
+		},
+		{
+			name: "file3.log",
+			contents: []string{
+				`info [2025-01-01 10:01:15.000 Z] Config loaded caller="config/loader.go:33"`,
+				`warn [2025-01-01 10:06:20.000 Z] High memory usage caller="monitor/usage.go:91" memory_pct=85`,
+			},
+		},
+	}
+
+	// Write test log files
+	var filePaths []string
+	for _, lf := range logFiles {
+		path := filepath.Join(tempDir, lf.name)
+		filePaths = append(filePaths, path)
+		
+		f, err := os.Create(path)
+		require.NoError(t, err)
+		
+		for _, line := range lf.contents {
+			_, err = f.WriteString(line + "\n")
+			require.NoError(t, err)
+		}
+		
+		f.Close()
+	}
+
+	// Test parsing multiple log files
+	t.Run("parse multiple log files", func(t *testing.T) {
+		var allLogs []LogEntry
+		
+		// Process each file
+		for _, filePath := range filePaths {
+			logs, err := parseLogFile(filePath, "", "", "", "", "", "")
+			require.NoError(t, err)
+			allLogs = append(allLogs, logs...)
+		}
+		
+		// Verify we got all 6 log entries
+		assert.Equal(t, 6, len(allLogs))
+		
+		// Sort logs by timestamp (as would happen in the main.go file)
+		sort.Slice(allLogs, func(i, j int) bool {
+			return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
+		})
+		
+		// Verify correct ordering after sorting
+		expectedOrder := []string{
+			"System started",
+			"Config loaded",
+			"User login",
+			"Connection failed",
+			"High memory usage",
+			"Cache hit",
+		}
+		
+		for i, msg := range expectedOrder {
+			assert.Contains(t, allLogs[i].Message, msg, "Log entry %d should be %s", i, msg)
+		}
+	})
+
+	t.Run("parse multiple log files with filters", func(t *testing.T) {
+		var allLogs []LogEntry
+		
+		// Process each file with level filter
+		for _, filePath := range filePaths {
+			logs, err := parseLogFile(filePath, "", "", "info", "", "", "")
+			require.NoError(t, err)
+			allLogs = append(allLogs, logs...)
+		}
+		
+		// We should only have the 3 info logs
+		assert.Equal(t, 3, len(allLogs))
+		
+		// Verify all entries have info level
+		for _, entry := range allLogs {
+			assert.Equal(t, "info", entry.Level)
+		}
+		
+		// Sort logs by timestamp
+		sort.Slice(allLogs, func(i, j int) bool {
+			return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
+		})
+		
+		// Verify correct ordering of info logs
+		expectedOrder := []string{
+			"System started",
+			"Config loaded",
+			"User login",
+		}
+		
+		for i, msg := range expectedOrder {
+			assert.Contains(t, allLogs[i].Message, msg, "Log entry %d should be %s", i, msg)
+		}
+	})
+
+	t.Run("parse with time range filter", func(t *testing.T) {
+		var allLogs []LogEntry
+		
+		// Process each file with time range filter
+		// Get logs between 10:01:00 and 10:06:00
+		startTime := "2025-01-01 10:01:00.000"
+		endTime := "2025-01-01 10:06:00.000"
+		
+		for _, filePath := range filePaths {
+			logs, err := parseLogFile(filePath, "", "", "", "", startTime, endTime)
+			require.NoError(t, err)
+			allLogs = append(allLogs, logs...)
+		}
+		
+		// We should have 3 logs in this time range
+		assert.Equal(t, 3, len(allLogs))
+		
+		// Sort logs by timestamp
+		sort.Slice(allLogs, func(i, j int) bool {
+			return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
+		})
+		
+		// Verify timestamps are within range
+		startTimeParsed, _ := time.Parse("2006-01-02 15:04:05.000", startTime)
+		endTimeParsed, _ := time.Parse("2006-01-02 15:04:05.000", endTime)
+		
+		for _, entry := range allLogs {
+			assert.True(t, !entry.Timestamp.Before(startTimeParsed))
+			assert.True(t, !entry.Timestamp.After(endTimeParsed))
+		}
+	})
+
+	t.Run("handle missing file gracefully", func(t *testing.T) {
+		var allLogs []LogEntry
+		
+		// Create a list with one valid file and one non-existent file
+		mixedPaths := []string{
+			filePaths[0], // Valid file
+			filepath.Join(tempDir, "nonexistent.log"), // Non-existent file
+		}
+		
+		// Process each file, skipping errors
+		for _, filePath := range mixedPaths {
+			logs, err := parseLogFile(filePath, "", "", "", "", "", "")
+			if err == nil {
+				allLogs = append(allLogs, logs...)
+			}
+		}
+		
+		// We should still have logs from the valid file
+		assert.Equal(t, 2, len(allLogs))
+	})
 }
