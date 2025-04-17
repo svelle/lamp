@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	
+	"github.com/atotto/clipboard"
 )
 
 const (
@@ -121,11 +123,13 @@ Analyze the provided logs and provide a comprehensive report including:
 4. Potential root causes for any problems
 5. Recommendations for further investigation or resolution
 
+Format your entire response in Markdown for easy reading and sharing. Use appropriate headings, lists, code blocks, and other Markdown formatting to make your analysis clear and well-structured.
+
 Focus on actionable insights and be specific about what you find.`
 
 	// Use a more concise prompt for Claude 3.7 Sonnet with thinking mode
 	if thinkingBudget > 0 {
-		systemPrompt = `You are an expert log analyzer for Mattermost server logs. Analyze these logs and identify issues, patterns, and solutions.`
+		systemPrompt = `You are an expert log analyzer for Mattermost server logs. Analyze these logs and identify issues, patterns, and solutions. Format your entire response in Markdown.`
 
 		// Check if we have logs with duplicate counts
 		hasDuplicates := false
@@ -277,10 +281,11 @@ Focus on actionable insights and be specific about what you find.`
 		return
 	}
 
-	// Display analysis
-	fmt.Println("\n" + strings.Repeat("=", 80))
-	fmt.Println("CLAUDE AI LOG ANALYSIS")
-	fmt.Println(strings.Repeat("=", 80))
+	// Capture analysis output in a buffer for potential clipboard copy
+	var analysisBuffer strings.Builder
+	
+	// Add markdown header to buffer
+	analysisBuffer.WriteString("# CLAUDE AI LOG ANALYSIS\n\n")
 
 	// Check if we're using extended thinking mode
 	if thinkingBudget > 0 {
@@ -298,36 +303,56 @@ Focus on actionable insights and be specific about what you find.`
 			}
 		}
 
-		// Display thinking output if available
+		// Add thinking output to buffer if available
 		if thinkingOutput != "" {
-			fmt.Println("\n" + strings.Repeat("-", 80))
-			fmt.Println("CLAUDE THINKING PROCESS:")
-			fmt.Println(strings.Repeat("-", 80))
-			fmt.Println(thinkingOutput)
-			fmt.Println(strings.Repeat("-", 80))
-			fmt.Println("FINAL ANALYSIS:")
-			fmt.Println(strings.Repeat("-", 80))
+			analysisBuffer.WriteString("## CLAUDE THINKING PROCESS\n\n")
+			analysisBuffer.WriteString(thinkingOutput)
+			analysisBuffer.WriteString("\n\n## FINAL ANALYSIS\n\n")
 		}
 
-		// Display final answer
+		// Add final answer to buffer
 		if finalAnswer != "" {
-			fmt.Println(finalAnswer)
+			analysisBuffer.WriteString(finalAnswer)
 		} else {
-			// If there's no separate final answer, display all content
+			// If there's no separate final answer, add all content
 			for _, content := range claudeResponse.Content {
 				if content.Type == "text" {
-					fmt.Println(content.Text)
+					analysisBuffer.WriteString(content.Text)
 				}
 			}
 		}
 	} else {
-		// Standard mode - display all content
+		// Standard mode - add all content to buffer
 		for _, content := range claudeResponse.Content {
 			if content.Type == "text" {
-				fmt.Println(content.Text)
+				analysisBuffer.WriteString(content.Text)
 			}
 		}
 	}
 
-	fmt.Println(strings.Repeat("=", 80))
+	// Display the analysis
+	fmt.Println("\n" + analysisBuffer.String())
+	
+	// Prompt the user to copy to clipboard
+	fmt.Println("\n-------------------------------------------------")
+	fmt.Println("The analysis above is formatted in Markdown.")
+	fmt.Print("Would you like to copy it to your clipboard? (y/n): ")
+	
+	// Read user input
+	var response string
+	_, err = fmt.Scanln(&response)
+	if err != nil {
+		fmt.Println("Error reading input:", err)
+		return
+	}
+	
+	// Check if user wants to copy to clipboard
+	if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+		err = clipboard.WriteAll(analysisBuffer.String())
+		if err != nil {
+			fmt.Println("Error copying to clipboard:", err)
+		} else {
+			fmt.Println("Analysis copied to clipboard!")
+		}
+	}
 }

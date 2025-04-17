@@ -5,6 +5,7 @@ go 1.23
 toolchain go1.23.7
 
 require (
+	github.com/atotto/clipboard v0.1.4
 	github.com/gdamore/tcell/v2 v2.7.1
 	github.com/rivo/tview v0.0.0-20240307173318-e804876934a1
 	github.com/schollz/progressbar/v3 v3.18.0
