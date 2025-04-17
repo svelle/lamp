@@ -28,7 +28,7 @@
 
 5. Verify the installation:
    ```bash
-   lamp --version
+   lamp version
    ```
 
 
