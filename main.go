@@ -281,13 +281,13 @@ func init() {
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
 		cmd.Flags().BoolVar(&aiAnalyze, "ai-analyze", false, "Analyze logs using AI")
 		cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for LLM provider")
-		cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai)")
+		cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai, gemini)")
 		cmd.Flags().StringVar(&llmModel, "llm-model", "", "LLM model to use (defaults to provider-specific default)")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
 		cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to LLM")
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
-		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for extended thinking mode (anthropic only)")
+		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for extended thinking mode (only supported by some models)")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
@@ -299,7 +299,7 @@ func init() {
 
 		// Add LLM provider completion
 		registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return []string{"anthropic", "openai"}, cobra.ShellCompDirectiveNoFileComp
+			return []string{"anthropic", "openai", "gemini"}, cobra.ShellCompDirectiveNoFileComp
 		})
 		
 		// Add LLM model completion based on selected provider
@@ -441,7 +441,7 @@ func processLogs(logs []LogEntry) error {
 	case aiAnalyze:
 		// Get provider from flag (we already validated the API key above)
 		// Validate llmProvider flag
-		supportedProviders := []string{"anthropic", "openai"}
+		supportedProviders := []string{"anthropic", "openai", "gemini"}
 		if !contains(supportedProviders, llmProvider) {
 			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
 		}

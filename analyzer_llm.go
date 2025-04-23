@@ -21,6 +21,8 @@ const (
 	ProviderAnthropic LLMProvider = "anthropic"
 	// ProviderOpenAI represents OpenAI's models
 	ProviderOpenAI LLMProvider = "openai"
+	// ProviderGemini represents Google's Gemini models
+	ProviderGemini LLMProvider = "gemini"
 	// Add more providers as needed
 
 	// Default settings
@@ -63,6 +65,8 @@ func analyzeWithLLM(logs []LogEntry, config LLMConfig) error {
 		return analyzeWithAnthropic(logs, config)
 	case ProviderOpenAI:
 		return analyzeWithOpenAI(logs, config)
+	case ProviderGemini:
+		return analyzeWithGemini(logs, config)
 	default:
 		return fmt.Errorf("unsupported LLM provider: %s", config.Provider)
 	}
@@ -75,6 +79,8 @@ func getAPIKeyEnvVar(provider LLMProvider) string {
 		return "ANTHROPIC_API_KEY"
 	case ProviderOpenAI:
 		return "OPENAI_API_KEY"
+	case ProviderGemini:
+		return "GEMINI_API_KEY"
 	default:
 		return ""
 	}
@@ -296,7 +302,21 @@ type AnthropicError struct {
 
 // analyzeWithAnthropic sends log data to Anthropic API for analysis
 func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
-	fmt.Printf("Analyzing logs with %s API...\n", config.Provider)
+	// Get model info if available
+	modelName := config.Model
+	if modelName == "" {
+		modelName = getDefaultModel(config.Provider)
+	}
+	
+	// Try to get the human-friendly model name
+	modelInfo, found := GetModelInfo(config.Provider, modelName)
+	if found {
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+			config.Provider, modelInfo.Name, modelName)
+	} else {
+		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+			config.Provider, modelName)
+	}
 
 	// Prepare prompts and logs
 	prompt, err := prepareAnalysisPrompts(logs, config)
@@ -501,9 +521,211 @@ type OpenAIError struct {
 	Code    string `json:"code"`
 }
 
+//
+// Gemini Implementation
+//
+
+// GeminiRequest represents the request structure for Gemini API
+type GeminiRequest struct {
+	Contents         []GeminiContent `json:"contents"`
+	GenerationConfig GeminiGenerationConfig `json:"generationConfig"`
+	SafetySettings   []GeminiSafetySetting `json:"safetySettings,omitempty"`
+}
+
+// GeminiContent represents a content part in the Gemini API request
+type GeminiContent struct {
+	Role  string         `json:"role"`
+	Parts []GeminiPart   `json:"parts"`
+}
+
+// GeminiPart represents a content part in a Gemini content message
+type GeminiPart struct {
+	Text string `json:"text"`
+}
+
+// GeminiGenerationConfig represents generation parameters for Gemini API
+type GeminiGenerationConfig struct {
+	Temperature     float64 `json:"temperature"`
+	MaxOutputTokens int     `json:"maxOutputTokens"`
+	TopP            float64 `json:"topP,omitempty"`
+	TopK            int     `json:"topK,omitempty"`
+}
+
+// GeminiSafetySetting represents safety settings for Gemini API
+type GeminiSafetySetting struct {
+	Category  string `json:"category"`
+	Threshold string `json:"threshold"`
+}
+
+// GeminiResponse represents the response structure from Gemini API
+type GeminiResponse struct {
+	Candidates []GeminiCandidate `json:"candidates"`
+	PromptFeedback *GeminiPromptFeedback `json:"promptFeedback,omitempty"`
+	Error *GeminiError `json:"error,omitempty"`
+}
+
+// GeminiCandidate represents a completion candidate in the Gemini API response
+type GeminiCandidate struct {
+	Content       GeminiContent       `json:"content"`
+	FinishReason  string              `json:"finishReason"`
+	SafetyRatings []GeminiSafetyRating `json:"safetyRatings,omitempty"`
+}
+
+// GeminiSafetyRating represents a safety rating in the Gemini API response
+type GeminiSafetyRating struct {
+	Category    string `json:"category"`
+	Probability string `json:"probability"`
+}
+
+// GeminiPromptFeedback represents feedback about the prompt
+type GeminiPromptFeedback struct {
+	SafetyRatings []GeminiSafetyRating `json:"safetyRatings"`
+}
+
+// GeminiError represents an error from the Gemini API
+type GeminiError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
+	Status  string `json:"status"`
+}
+
+// analyzeWithGemini sends log data to Gemini API for analysis
+func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
+	// Get model info if available
+	modelName := config.Model
+	if modelName == "" {
+		modelName = getDefaultModel(config.Provider)
+	}
+	
+	// Try to get the human-friendly model name
+	modelInfo, found := GetModelInfo(config.Provider, modelName)
+	if found {
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+			config.Provider, modelInfo.Name, modelName)
+	} else {
+		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+			config.Provider, modelName)
+	}
+
+	// Prepare prompts and logs
+	prompt, err := prepareAnalysisPrompts(logs, config)
+	if err != nil {
+		return err
+	}
+
+	// Default model if not specified
+	modelToUse := config.Model
+	if modelToUse == "" {
+		modelToUse = getDefaultModel(config.Provider)
+	}
+
+	// Gemini doesn't support "system" role, so combine system and user prompts
+	// into a single user message
+	combinedPrompt := prompt.SystemPrompt + "\n\n" + prompt.UserPrompt
+	
+	userContent := GeminiContent{
+		Role: "user",
+		Parts: []GeminiPart{
+			{Text: combinedPrompt},
+		},
+	}
+
+	// Create the full request
+	request := GeminiRequest{
+		Contents: []GeminiContent{userContent},
+		GenerationConfig: GeminiGenerationConfig{
+			Temperature:     0.3,
+			MaxOutputTokens: 4000,
+			TopP:            0.95,
+		},
+	}
+
+	// Convert request to JSON
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+
+	// Create HTTP request
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", 
+		modelToUse, config.APIKey)
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestJSON))
+	if err != nil {
+		return fmt.Errorf("error creating HTTP request: %v", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 60 * time.Second,
+	}
+
+	// Send request
+	fmt.Println("Sending request to Gemini API...")
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending request to Gemini API: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response: %v", err)
+	}
+
+	// Check if response is successful
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error from Gemini API (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var geminiResponse GeminiResponse
+	err = json.Unmarshal(body, &geminiResponse)
+	if err != nil {
+		return fmt.Errorf("error parsing response: %v", err)
+	}
+
+	// Check for API error
+	if geminiResponse.Error != nil {
+		return fmt.Errorf("Gemini API error (code %d): %s", 
+			geminiResponse.Error.Code, geminiResponse.Error.Message)
+	}
+
+	// Extract the content from the response
+	if len(geminiResponse.Candidates) == 0 {
+		return fmt.Errorf("no completions returned from Gemini API")
+	}
+
+	// Get the analysis text from the response
+	var analysisText string
+	for _, part := range geminiResponse.Candidates[0].Content.Parts {
+		analysisText += part.Text
+	}
+
+	// Display the analysis and handle clipboard copy
+	return displayAndCopyAnalysis(analysisText)
+}
+
 // analyzeWithOpenAI sends log data to OpenAI API for analysis
 func analyzeWithOpenAI(logs []LogEntry, config LLMConfig) error {
-	fmt.Printf("Analyzing logs with %s API...\n", config.Provider)
+	// Get model info if available
+	modelName := config.Model
+	if modelName == "" {
+		modelName = getDefaultModel(config.Provider)
+	}
+	
+	// Try to get the human-friendly model name
+	modelInfo, found := GetModelInfo(config.Provider, modelName)
+	if found {
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+			config.Provider, modelInfo.Name, modelName)
+	} else {
+		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+			config.Provider, modelName)
+	}
 
 	// Prepare prompts and logs
 	prompt, err := prepareAnalysisPrompts(logs, config)

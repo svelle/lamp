@@ -64,6 +64,29 @@ var ProviderModels = map[LLMProvider][]ModelInfo{
 			IsDefault:   false,
 		},
 	},
+	ProviderGemini: {
+		{
+			ID:          "gemini-2.5-pro-preview-03-25",
+			Name:        "Gemini 2.5 Pro Preview",
+			Description: "Enhanced thinking and reasoning, multimodal understanding, advanced coding",
+			MaxTokens:   32000,
+			IsDefault:   true,
+		},
+		{
+			ID:          "gemini-2.5-flash-preview-04-17",
+			Name:        "Gemini 2.5 Flash Preview",
+			Description: "Adaptive thinking, cost efficiency for multimodal tasks",
+			MaxTokens:   16000,
+			IsDefault:   false,
+		},
+		{
+			ID:          "gemini-2.0-flash",
+			Name:        "Gemini 2.0 Flash",
+			Description: "Speed, thinking, realtime streaming, and multimodal generation",
+			MaxTokens:   8000,
+			IsDefault:   false,
+		},
+	},
 }
 
 // GetDefaultModel returns the default model for a provider
