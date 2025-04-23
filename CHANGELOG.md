@@ -11,8 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Markdown support for AI analysis results
 - Support for multiple LLM providers (Anthropic and OpenAI)
 - New `--llm-provider` flag to select the LLM provider
-- New `--llm-model` flag to specify LLM model
+- New `--llm-model` flag to specify LLM model with auto-completion
 - Implemented OpenAI API integration for log analysis
+- Created central models registry for easier model management
 
 ### Changed
 - Significant performance improvements to log trimming functionality:

@@ -87,14 +87,7 @@ func getEnvAPIKey(envVar string) string {
 
 // getDefaultModel returns the default model for a provider
 func getDefaultModel(provider LLMProvider) string {
-	switch provider {
-	case ProviderAnthropic:
-		return "claude-3-5-haiku-latest"
-	case ProviderOpenAI:
-		return "gpt-4o"
-	default:
-		return ""
-	}
+	return GetDefaultModel(provider)
 }
 
 // formatLogsForAnalysis formats log entries into a text representation for analysis

@@ -301,6 +301,24 @@ func init() {
 		registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return []string{"anthropic", "openai"}, cobra.ShellCompDirectiveNoFileComp
 		})
+		
+		// Add LLM model completion based on selected provider
+		registerFlagCompletion(cmd, "llm-model", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			// Get the provider flag value
+			provider := cmd.Flag("llm-provider").Value.String()
+			if provider == "" {
+				provider = "anthropic" // Default provider
+			}
+			
+			// Get available models for this provider
+			var modelNames []string
+			models := GetAvailableModels(LLMProvider(provider))
+			for _, model := range models {
+				modelNames = append(modelNames, model.ID)
+			}
+			
+			return modelNames, cobra.ShellCompDirectiveNoFileComp
+		})
 
 		// Add file completion for flags that expect file paths
 		registerFlagCompletion(cmd, "csv", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
