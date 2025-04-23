@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Markdown support for AI analysis results
+- Support for multiple LLM providers (Anthropic and OpenAI)
+- New `--llm-provider` flag to select the LLM provider
+- New `--llm-model` flag to specify LLM model
+- Implemented OpenAI API integration for log analysis
 
 ### Changed
 - Significant performance improvements to log trimming functionality:
@@ -18,9 +22,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Implemented parallel processing for large log sets (1000+ entries)
   - Added smarter log grouping by log level to reduce comparison space
   - Optimized memory usage with periodic cache clearing and chunked processing
+- Modified AI analysis to use a provider-agnostic approach
+- Environment variable for Anthropic is now `ANTHROPIC_API_KEY`
+- Refactored LLM analyzer code into a single, more maintainable module
 
 ### Fixed
 - Ensured filtering happens before trimming to reduce resource usage
+
+### Breaking Changes
+- Removed support for `CLAUDE_API_KEY` environment variable, use `ANTHROPIC_API_KEY` instead
 
 ## [1.0.0] - 2024-02-27
 
