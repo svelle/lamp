@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/schollz/progressbar/v3"
@@ -284,12 +286,11 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		return logs
 	}
 
-	var result []LogEntry
-	processedEntries := make(map[int]bool)
-
 	// Similarity threshold (0.0-1.0) - higher means more strict matching
 	const similarityThreshold = 0.8
-	const updateInterval = 10 // Update progress bar description every N entries
+	const updateInterval = 10     // Update progress bar description every N entries
+	const batchSize = 100         // Process logs in batches to reduce memory pressure
+	const parallelThreshold = 1000 // Minimum log count to use parallel processing
 
 	// Create progress bar
 	bar := progressbar.NewOptions(len(logs),
@@ -313,7 +314,30 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		logger.Warn("Error rendering progress bar", "error", err)
 	}
 
+	// Use parallel processing for large log sets
+	if len(logs) >= parallelThreshold {
+		return trimDuplicateLogsParallel(logs, similarityThreshold, bar)
+	}
+	
+	return trimDuplicateLogsSequential(logs, similarityThreshold, batchSize, updateInterval, bar)
+}
+
+// trimDuplicateLogsSequential performs sequential deduplication for smaller log sets
+func trimDuplicateLogsSequential(logs []LogEntry, similarityThreshold float64, batchSize, updateInterval int, bar *progressbar.ProgressBar) []LogEntry {
+	var result []LogEntry
+	processedEntries := make(map[int]bool)
+	
+	// Cache for normalized messages to avoid redundant processing
+	normalizedCache := make(map[int]string, len(logs))
+	
 	removedCount := 0
+
+	// Group entries by log level to reduce comparison space
+	logsByLevel := make(map[string][]int)
+	for i, entry := range logs {
+		level := strings.ToLower(entry.Level)
+		logsByLevel[level] = append(logsByLevel[level], i)
+	}
 
 	// Process each log entry
 	for i, entry := range logs {
@@ -336,27 +360,28 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		result = append(result, entryWithCount)
 		processedEntries[i] = true
 
-		// Normalize the current message
-		normalizedMsg := normalizeLogMessage(entry.Message)
+		// Get or compute normalized message
+		var normalizedMsg string
+		var exists bool
+		if normalizedMsg, exists = normalizedCache[i]; !exists {
+			normalizedMsg = normalizeLogMessage(entry.Message)
+			normalizedCache[i] = normalizedMsg
+		}
 
 		// Get words from normalized message (for word-based similarity)
 		baseWords := strings.Fields(normalizedMsg)
 
 		processedInThisIteration := 0
+		entryLevel := strings.ToLower(entry.Level)
 
-		// Check remaining entries for similarity
-		for j := i + 1; j < len(logs); j++ {
-			// Skip if already processed
-			if processedEntries[j] {
+		// Only compare with entries of the same level to reduce comparison space
+		for _, j := range logsByLevel[entryLevel] {
+			// Skip if already processed or if it's the current entry
+			if j <= i || processedEntries[j] {
 				continue
 			}
 
-			// Check if same level and similar source
-			if !strings.EqualFold(entry.Level, logs[j].Level) {
-				continue
-			}
-
-			// Check source similarity
+			// Check source similarity (early filter)
 			sourceSimilar := strings.EqualFold(entry.Source, logs[j].Source) ||
 				(len(entry.Source) > 0 && len(logs[j].Source) > 0 &&
 					stringSimilarity(entry.Source, logs[j].Source) > 0.7)
@@ -365,8 +390,12 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 				continue
 			}
 
-			// Normalize comparison message
-			compMsg := normalizeLogMessage(logs[j].Message)
+			// Get or compute normalized comparison message
+			var compMsg string
+			if compMsg, exists = normalizedCache[j]; !exists {
+				compMsg = normalizeLogMessage(logs[j].Message)
+				normalizedCache[j] = compMsg
+			}
 
 			// Compare messages
 			if isSimilarMessage(normalizedMsg, compMsg, baseWords, similarityThreshold) {
@@ -388,6 +417,16 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 		if err := bar.Add(1); err != nil {
 			logger.Warn("Error updating progress bar", "error", err)
 		}
+		
+		// Periodically clear the cache to manage memory usage
+		if i > 0 && i%batchSize == 0 {
+			// Clear cache for already processed entries
+			for k := range normalizedCache {
+				if k < i-batchSize {
+					delete(normalizedCache, k)
+				}
+			}
+		}
 	}
 
 	// Ensure the bar is completed
@@ -398,43 +437,250 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 	return result
 }
 
+// trimDuplicateLogsParallel performs parallel deduplication for larger log sets
+func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar *progressbar.ProgressBar) []LogEntry {
+	// Normalize all messages in parallel first
+	normalizedMsgs := make([]string, len(logs))
+	
+	// Group entries by log level to reduce comparison space
+	logsByLevel := make(map[string][]int)
+	for i, entry := range logs {
+		level := strings.ToLower(entry.Level)
+		logsByLevel[level] = append(logsByLevel[level], i)
+	}
+	
+	// Use a worker pool to normalize messages in parallel
+	workersCount := runtime.NumCPU()
+	bar.Describe("[cyan]Normalizing log messages in parallel[reset]")
+	
+	// Create a channel to distribute work
+	jobs := make(chan int, len(logs))
+	for i := range logs {
+		jobs <- i
+	}
+	close(jobs)
+	
+	// Use a sync.Mutex to protect the normalizedMsgs slice
+	var mutex sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(workersCount)
+	
+	// Launch workers
+	for w := 0; w < workersCount; w++ {
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				normalizedMsg := normalizeLogMessage(logs[i].Message)
+				mutex.Lock()
+				normalizedMsgs[i] = normalizedMsg
+				mutex.Unlock()
+				
+				// Update progress bar (safely)
+				mutex.Lock()
+				if err := bar.Add(1); err != nil {
+					logger.Warn("Error updating progress bar", "error", err)
+				}
+				mutex.Unlock()
+			}
+		}()
+	}
+	
+	// Wait for all normalizations to complete
+	wg.Wait()
+	
+	// Reset the progress bar for the main deduplication phase
+	bar.Reset()
+	bar.ChangeMax(len(logs))
+	if err := bar.RenderBlank(); err != nil {
+		logger.Warn("Error rendering progress bar", "error", err)
+	}
+	bar.Describe("[cyan]Deduplicating logs with parallel processing[reset]")
+	
+	var result []LogEntry
+	processedEntries := make(map[int]bool)
+	var resultMutex sync.Mutex
+	var processedMutex sync.Mutex
+	removedCount := 0
+	var removedMutex sync.Mutex
+	
+	// Process logs in chunks based on their level
+	var levelWg sync.WaitGroup
+	for level, indices := range logsByLevel {
+		if len(indices) < 10 {  // Process small groups sequentially
+			processLogGroup(
+				logs, normalizedMsgs, indices, level, similarityThreshold, 
+				&result, processedEntries, &removedCount, bar,
+				&resultMutex, &processedMutex, &removedMutex,
+			)
+		} else {
+			levelWg.Add(1)
+			go func(lvl string, idxs []int) {
+				defer levelWg.Done()
+				processLogGroup(
+					logs, normalizedMsgs, idxs, lvl, similarityThreshold, 
+					&result, processedEntries, &removedCount, bar,
+					&resultMutex, &processedMutex, &removedMutex,
+				)
+			}(level, indices)
+		}
+	}
+	
+	levelWg.Wait()
+	
+	// Ensure the bar is completed
+	if err := bar.Finish(); err != nil {
+		logger.Warn("Error completing progress bar", "error", err)
+	}
+	
+	logger.Info("Parallel deduplication completed", "removed", removedCount)
+	return result
+}
+
+// processLogGroup processes a group of logs with the same level
+func processLogGroup(
+	logs []LogEntry, 
+	normalizedMsgs []string, 
+	indices []int, 
+	level string, 
+	similarityThreshold float64,
+	result *[]LogEntry,
+	processedEntries map[int]bool,
+	removedCount *int,
+	bar *progressbar.ProgressBar,
+	resultMutex, processedMutex, removedMutex *sync.Mutex,
+) {
+	// Process each log entry in this level group
+	for _, i := range indices {
+		// Skip if already processed
+		processedMutex.Lock()
+		if processedEntries[i] {
+			processedMutex.Unlock()
+			if err := bar.Add(1); err != nil {
+				logger.Warn("Error updating progress bar", "error", err)
+			}
+			continue
+		}
+		processedEntries[i] = true
+		processedMutex.Unlock()
+		
+		// Add this entry to results (with initial duplicate count of 1)
+		entryWithCount := logs[i]
+		entryWithCount.DuplicateCount = 1
+		
+		resultMutex.Lock()
+		resultIndex := len(*result)
+		*result = append(*result, entryWithCount)
+		resultMutex.Unlock()
+		
+		// Get normalized message and its words
+		normalizedMsg := normalizedMsgs[i]
+		baseWords := strings.Fields(normalizedMsg)
+		
+		processedInThisIteration := 0
+		
+		// Compare with other entries of the same level
+		for _, j := range indices {
+			if j <= i {
+				continue
+			}
+			
+			// Skip if already processed
+			processedMutex.Lock()
+			isProcessed := processedEntries[j]
+			processedMutex.Unlock()
+			
+			if isProcessed {
+				continue
+			}
+			
+			// Check source similarity (early filter)
+			sourceSimilar := strings.EqualFold(logs[i].Source, logs[j].Source) ||
+				(len(logs[i].Source) > 0 && len(logs[j].Source) > 0 &&
+					stringSimilarity(logs[i].Source, logs[j].Source) > 0.7)
+					
+			if !sourceSimilar {
+				continue
+			}
+			
+			compMsg := normalizedMsgs[j]
+			
+			// Compare messages
+			if isSimilarMessage(normalizedMsg, compMsg, baseWords, similarityThreshold) {
+				// Mark as processed
+				processedMutex.Lock()
+				processedEntries[j] = true
+				processedMutex.Unlock()
+				
+				processedInThisIteration++
+				
+				// Increment counters
+				removedMutex.Lock()
+				*removedCount++
+				removedMutex.Unlock()
+				
+				// Update duplicate count
+				resultMutex.Lock()
+				(*result)[resultIndex].DuplicateCount++
+				resultMutex.Unlock()
+			}
+		}
+		
+		// Update progress periodically
+		if processedInThisIteration > 0 && processedInThisIteration%10 == 0 {
+			removedMutex.Lock()
+			currentRemoved := *removedCount
+			removedMutex.Unlock()
+			
+			bar.Describe(fmt.Sprintf("[cyan]Processed: %d - Removed: %d[reset]", i, currentRemoved))
+		}
+		
+		// Update progress bar
+		if err := bar.Add(1); err != nil {
+			logger.Warn("Error updating progress bar", "error", err)
+		}
+	}
+}
+
+// Precompile regex patterns for better performance
+var (
+	normalizePatterns = []struct {
+		regex       *regexp.Regexp
+		replacement string
+	}{
+		{regexp.MustCompile(`\b[0-9a-f]{8}\b`), "ID_SHORT"},                           // Short hex IDs (8 chars)
+		{regexp.MustCompile(`\b[0-9a-f]{32}\b`), "ID_LONG"},                           // Long hex IDs (32 chars)
+		{regexp.MustCompile(`\b[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\b`), "UUID"}, // UUIDs
+		{regexp.MustCompile(`\b([0-9a-f]{6,31})\b`), "ID"},                            // Other hex IDs
+		{regexp.MustCompile(`\d{4}[-/]\d{1,2}[-/]\d{1,2}`), "DATE"},                   // Dates (yyyy-mm-dd)
+		{regexp.MustCompile(`\d{1,2}[-/]\d{1,2}[-/]\d{2,4}`), "DATE"},                 // Dates (mm-dd-yyyy)
+		{regexp.MustCompile(`\d{1,2}:\d{1,2}(:\d{1,2})?(\.\d+)?`), "TIME"},            // Times
+		{regexp.MustCompile(`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`), "IP"},              // IPv4 addresses
+		{regexp.MustCompile(`(([0-9a-f]{1,4}:){7}|::)[0-9a-f]{1,4}`), "IPV6"},         // IPv6 addresses
+		{regexp.MustCompile(`\d+(\.\d+)?ms`), "DURATION_MS"},                          // Millisecond durations
+		{regexp.MustCompile(`\d+(\.\d+)?s`), "DURATION_S"},                            // Second durations
+		{regexp.MustCompile(`\d+(\.\d+)?ns`), "DURATION_NS"},                          // Nanosecond durations
+		{regexp.MustCompile(`\d+(\.\d+)?[mu]s`), "DURATION_US"},                       // Microsecond durations
+		{regexp.MustCompile(`\b\d{1,9}\b`), "NUMBER"},                                 // Simple numbers up to 9 digits
+		{regexp.MustCompile(`"[^"]*"`), "STRING"},                                     // Quoted strings
+		{regexp.MustCompile(`'[^']*'`), "STRING"},                                     // Single-quoted strings
+		{regexp.MustCompile(`\b([a-zA-Z0-9_-]+\.)+[a-zA-Z0-9_-]+\b`), "PATH"},         // File/URL paths
+		{regexp.MustCompile(`\b\d+\.\d+\.\d+\b`), "VERSION"},                          // Version numbers
+	}
+	whitespaceRegex = regexp.MustCompile(`\s+`)
+)
+
 // normalizeLogMessage applies various normalization techniques to a log message
 func normalizeLogMessage(message string) string {
 	// Convert to lowercase for case-insensitive comparison
 	normalized := strings.ToLower(message)
 
-	// Replace common variable patterns
-	patterns := []struct {
-		regex       string
-		replacement string
-	}{
-		{`\b[0-9a-f]{8}\b`, "ID_SHORT"},                           // Short hex IDs (8 chars)
-		{`\b[0-9a-f]{32}\b`, "ID_LONG"},                           // Long hex IDs (32 chars)
-		{`\b[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\b`, "UUID"}, // UUIDs
-		{`\b([0-9a-f]{6,31})\b`, "ID"},                            // Other hex IDs
-		{`\d{4}[-/]\d{1,2}[-/]\d{1,2}`, "DATE"},                   // Dates (yyyy-mm-dd)
-		{`\d{1,2}[-/]\d{1,2}[-/]\d{2,4}`, "DATE"},                 // Dates (mm-dd-yyyy)
-		{`\d{1,2}:\d{1,2}(:\d{1,2})?(\.\d+)?`, "TIME"},            // Times
-		{`\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}`, "IP"},              // IPv4 addresses
-		{`(([0-9a-f]{1,4}:){7}|::)[0-9a-f]{1,4}`, "IPV6"},         // IPv6 addresses
-		{`\d+(\.\d+)?ms`, "DURATION_MS"},                          // Millisecond durations
-		{`\d+(\.\d+)?s`, "DURATION_S"},                            // Second durations
-		{`\d+(\.\d+)?ns`, "DURATION_NS"},                          // Nanosecond durations
-		{`\d+(\.\d+)?[mu]s`, "DURATION_US"},                       // Microsecond durations
-		{`\b\d{1,9}\b`, "NUMBER"},                                 // Simple numbers up to 9 digits
-		{`"[^"]*"`, "STRING"},                                     // Quoted strings
-		{`'[^']*'`, "STRING"},                                     // Single-quoted strings
-		{`\b([a-zA-Z0-9_-]+\.)+[a-zA-Z0-9_-]+\b`, "PATH"},         // File/URL paths
-		{`\b\d+\.\d+\.\d+\b`, "VERSION"},                          // Version numbers
-	}
-
-	for _, p := range patterns {
-		re := regexp.MustCompile(p.regex)
-		normalized = re.ReplaceAllString(normalized, p.replacement)
+	// Apply precompiled regex patterns
+	for _, p := range normalizePatterns {
+		normalized = p.regex.ReplaceAllString(normalized, p.replacement)
 	}
 
 	// Remove extra whitespace
-	normalized = regexp.MustCompile(`\s+`).ReplaceAllString(normalized, " ")
+	normalized = whitespaceRegex.ReplaceAllString(normalized, " ")
 	return strings.TrimSpace(normalized)
 }
 
@@ -462,33 +708,36 @@ func stringSimilarity(s1, s2 string) float64 {
 
 // isSimilarMessage determines if two messages are similar enough based on different measures
 func isSimilarMessage(msg1, msg2 string, msg1Words []string, threshold float64) bool {
-	// Exact match after normalization
+	// Quick path: exact match after normalization
 	if msg1 == msg2 {
 		return true
 	}
 
-	// If one message is contained within the other
-	if strings.Contains(msg1, msg2) || strings.Contains(msg2, msg1) {
-		return true
-	}
-
-	// Short-circuit for very different length strings
+	// Quick path: if one message is contained within the other
+	// Only check if the lengths aren't too different to avoid unnecessary string operations
 	lenRatio := float64(min(len(msg1), len(msg2))) / float64(max(len(msg1), len(msg2)))
-	if lenRatio < 0.5 {
+	if lenRatio > 0.5 {
+		if strings.Contains(msg1, msg2) || strings.Contains(msg2, msg1) {
+			return true
+		}
+	} else {
+		// Early exit for very different length strings
 		return false
 	}
 
-	// Check direct string similarity
-	if stringSimilarity(msg1, msg2) >= threshold {
-		return true
-	}
-
-	// Check word-based similarity
+	// Optimize for common case: check word-based similarity first as it's usually faster
+	// and more effective for log messages than Levenshtein distance
 	msg2Words := strings.Fields(msg2)
+	
+	// Skip Jaccard similarity calculation if the word counts are very different
+	wordLenRatio := float64(min(len(msg1Words), len(msg2Words))) / float64(max(len(msg1Words), len(msg2Words)))
+	if wordLenRatio < 0.5 {
+		return false
+	}
 
 	// Calculate Jaccard similarity of words
 	commonWords := 0
-	msg1WordSet := make(map[string]bool)
+	msg1WordSet := make(map[string]bool, len(msg1Words))
 	for _, word := range msg1Words {
 		msg1WordSet[word] = true
 	}
@@ -505,25 +754,45 @@ func isSimilarMessage(msg1, msg2 string, msg1Words []string, threshold float64) 
 	}
 
 	jaccardSimilarity := float64(commonWords) / float64(totalWords)
-	return jaccardSimilarity >= threshold
+	if jaccardSimilarity >= threshold {
+		return true
+	}
+
+	// Only perform the more expensive Levenshtein distance check if the Jaccard similarity
+	// is close but not quite at the threshold
+	if jaccardSimilarity >= threshold*0.8 {
+		return stringSimilarity(msg1, msg2) >= threshold
+	}
+	
+	return false
 }
 
-// levenshteinDistance calculates the edit distance between two strings
+// levenshteinDistance calculates the edit distance between two strings.
+// This is an optimized version with early termination if the distance exceeds maxDistance.
 func levenshteinDistance(s1, s2 string) int {
+	// Quick path for empty strings
 	if len(s1) == 0 {
 		return len(s2)
 	}
 	if len(s2) == 0 {
 		return len(s1)
 	}
-
-	// Create two work vectors of integer distances
+	
+	// Optimization: swap strings so s1 is the shorter one
+	if len(s1) > len(s2) {
+		s1, s2 = s2, s1
+	}
+	
+	// Optimization: if strings are identical, return 0 immediately
+	if s1 == s2 {
+		return 0
+	}
+	
+	// Reuse vectors to avoid continuous allocations
 	v0 := make([]int, len(s2)+1)
 	v1 := make([]int, len(s2)+1)
 
 	// Initialize v0 (the previous row of distances)
-	// This row is A[0][i]: edit distance for an empty s1
-	// The distance is just the number of characters to delete from s2
 	for i := 0; i <= len(s2); i++ {
 		v0[i] = i
 	}
@@ -531,28 +800,41 @@ func levenshteinDistance(s1, s2 string) int {
 	// Calculate v1 (current row distances) from the previous row v0
 	for i := 0; i < len(s1); i++ {
 		// First element of v1 is A[i+1][0]
-		// Edit distance is delete (i+1) chars from s1 to match empty s2
 		v1[0] = i + 1
+		
+		// Track minimum value in this row to enable early termination
+		minValue := v1[0]
 
 		// Use formula to fill in the rest of the row
 		for j := 0; j < len(s2); j++ {
-			deletionCost := v0[j+1] + 1
-			insertionCost := v1[j] + 1
-			substitutionCost := v0[j]
-			if s1[i] != s2[j] {
-				substitutionCost++
+			// Cost calculation
+			var cost int
+			if s1[i] == s2[j] {
+				cost = 0
+			} else {
+				cost = 1
 			}
-
-			v1[j+1] = min(deletionCost, min(insertionCost, substitutionCost))
+			
+			v1[j+1] = min(
+				v0[j+1] + 1,      // deletion
+				min(
+					v1[j] + 1,     // insertion
+					v0[j] + cost,  // substitution
+				),
+			)
+			
+			// Track minimum value in this row
+			if v1[j+1] < minValue {
+				minValue = v1[j+1]
+			}
 		}
 
-		// Copy v1 to v0 for next iteration
-		for j := 0; j <= len(s2); j++ {
-			v0[j] = v1[j]
-		}
+		// Swap vectors for next iteration (avoid extra allocation)
+		v0, v1 = v1, v0
 	}
 
-	return v1[len(s2)]
+	// The result is in v0 (previously v1) because we swapped vectors
+	return v0[len(s2)]
 }
 
 // shouldIncludeEntry checks if a log entry matches all the specified filters

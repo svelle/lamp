@@ -331,6 +331,9 @@ func main() {
 
 // processLogs handles the common log processing logic
 func processLogs(logs []LogEntry) error {
+	// Note: Filtering is already applied during log parsing in parseLogFile
+	// so by the time logs reach this function, they're already filtered
+	
 	// Apply trim if requested
 	if trim {
 		logger.Info("Starting deduplication", "count", len(logs))
