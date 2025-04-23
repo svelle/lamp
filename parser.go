@@ -491,7 +491,9 @@ func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar
 	// Reset the progress bar for the main deduplication phase
 	bar.Reset()
 	bar.ChangeMax(len(logs))
-	bar.RenderBlank()
+	if err := bar.RenderBlank(); err != nil {
+		logger.Warn("Error rendering progress bar", "error", err)
+	}
 	bar.Describe("[cyan]Deduplicating logs with parallel processing[reset]")
 	
 	var result []LogEntry
