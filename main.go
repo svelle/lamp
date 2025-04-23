@@ -412,10 +412,13 @@ func processLogs(logs []LogEntry) error {
 	switch {
 	case aiAnalyze:
 		// Get provider from flag (we already validated the API key above)
-		provider := LLMProvider(llmProvider)
-		if provider == "" {
-			provider = ProviderAnthropic // Default to Anthropic
+		// Validate llmProvider flag
+		supportedProviders := []string{"anthropic", "openai"}
+		if !isValidProvider(llmProvider, supportedProviders) {
+			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
 		}
+		
+		provider := LLMProvider(llmProvider)
 		apiKeyValue := apiKey
 		if apiKeyValue == "" {
 			apiKeyValue = os.Getenv(getAPIKeyEnvVar(provider))
