@@ -65,9 +65,11 @@ lamp <command> [flags]
 
 ### Options
 
-- `--ai-analyze`: Analyze logs using Claude AI
+- `--ai-analyze`: Analyze logs using AI
 - `--analyze`: Analyze logs and show statistics
-- `--api-key <key>`: Claude API key for AI analysis (or set CLAUDE_API_KEY environment variable)
+- `--api-key <key>`: API key for LLM provider
+- `--llm-provider <provider>`: LLM provider to use (anthropic, openai) (default: anthropic)
+- `--llm-model <model>`: LLM model to use (defaults to provider-specific default)
 - `--csv <path>`: Export logs to CSV file at specified path
 - `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
 - `--help`: Show help information for any command
@@ -175,14 +177,21 @@ Launch interactive TUI mode for exploring logs:
 lamp file mattermost.log --interactive
 ```
 
-Analyze logs using Claude AI:
+Analyze logs using AI:
 ```bash
-# Using command line flag
+# Using Anthropic Claude (default provider)
 lamp file mattermost.log --ai-analyze --api-key YOUR_API_KEY
 
-# Using environment variable
-export CLAUDE_API_KEY=YOUR_API_KEY
+# Using environment variables
+export ANTHROPIC_API_KEY=YOUR_API_KEY
 lamp file mattermost.log --ai-analyze
+
+# Using OpenAI as the provider
+export OPENAI_API_KEY=YOUR_API_KEY
+lamp file mattermost.log --ai-analyze --llm-provider openai
+
+# Using a specific provider and model
+lamp file mattermost.log --ai-analyze --llm-provider anthropic --llm-model claude-3-sonnet-latest
 
 # Specify maximum number of log entries to analyze
 lamp file mattermost.log --ai-analyze --max-entries 200
@@ -191,14 +200,17 @@ lamp file mattermost.log --ai-analyze --max-entries 200
 lamp file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
 ```
 
-Analyze support packet logs using Claude AI:
+Analyze support packet logs using AI:
 ```bash
-# Using command line flag
+# Using Anthropic Claude (default provider)
 lamp support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
 
 # Using environment variable
-export CLAUDE_API_KEY=YOUR_API_KEY
+export ANTHROPIC_API_KEY=YOUR_API_KEY
 lamp support-packet mattermost_support_packet.zip --ai-analyze
+
+# Using OpenAI
+lamp support-packet mattermost_support_packet.zip --ai-analyze --llm-provider openai --api-key YOUR_OPENAI_API_KEY
 ```
 
 ## Output Format
@@ -285,21 +297,29 @@ This mode is particularly useful for exploring large log files or investigating 
 
 ## AI-Powered Log Analysis
 
-The `--ai-analyze` option uses Claude Sonnet API to provide an intelligent analysis of your logs. This feature:
+The `--ai-analyze` option uses AI to provide an intelligent analysis of your logs. This feature:
 
-- Sends a sample of your logs to Claude for analysis
+- Sends a sample of your logs to an LLM for analysis
 - Provides a comprehensive report of issues and patterns
 - Identifies potential root causes for errors
 - Offers recommendations for resolution
 - Gives context and insights that might not be obvious from statistical analysis
 
-To use this feature, you need a Claude API key from Anthropic. You can obtain one by signing up at [https://console.anthropic.com/](https://console.anthropic.com/).
+Supported LLM providers:
+- Anthropic Claude (default) - requires an API key from [https://console.anthropic.com/](https://console.anthropic.com/)
+- OpenAI - requires an API key from [https://platform.openai.com/](https://platform.openai.com/)
 
 You can provide the API key in two ways:
 1. Using the `--api-key` command line flag
-2. Setting the `CLAUDE_API_KEY` environment variable (more secure)
+2. Setting the appropriate environment variable:
+   - For Anthropic: `ANTHROPIC_API_KEY`
+   - For OpenAI: `OPENAI_API_KEY`
 
-Note: When using AI analysis, a limited number of log entries are sent to the Claude API to stay within token limits. By default, the tool sends up to 100 entries, but you can adjust this with the `--max-entries` flag.
+You can customize the LLM provider and model:
+- `--llm-provider`: Choose the LLM provider (anthropic, openai)
+- `--llm-model`: Specify a particular model (defaults to a provider-specific default)
+
+Note: When using AI analysis, a limited number of log entries are sent to the LLM provider to stay within token limits. By default, the tool sends up to 100 entries, but you can adjust this with the `--max-entries` flag.
 
 You can also provide a problem statement with the `--problem` flag to help guide the AI analysis toward specific issues you're investigating.
 
