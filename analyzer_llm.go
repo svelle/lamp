@@ -13,6 +13,12 @@ import (
 	"github.com/atotto/clipboard"
 )
 
+// OllamaHost stores the URL of the Ollama host (set from main.go)
+var OllamaHost string = "http://localhost:11434"
+
+// OllamaTimeout stores the timeout in seconds for Ollama requests (set from main.go)
+var OllamaTimeout int = 120
+
 // LLMProvider represents the different LLM providers available
 type LLMProvider string
 
@@ -23,6 +29,8 @@ const (
 	ProviderOpenAI LLMProvider = "openai"
 	// ProviderGemini represents Google's Gemini models
 	ProviderGemini LLMProvider = "gemini"
+	// ProviderOllama represents locally hosted models via Ollama
+	ProviderOllama LLMProvider = "ollama"
 	// Add more providers as needed
 
 	// Default settings
@@ -50,8 +58,9 @@ type AnalysisPrompt struct {
 
 // analyzeWithLLM routes the log analysis to the appropriate LLM provider
 func analyzeWithLLM(logs []LogEntry, config LLMConfig) error {
-	// If the API key is not provided, try to get it from the environment
-	if config.APIKey == "" {
+	// If the API key is not provided and we're not using Ollama (which doesn't need a key), 
+	// try to get it from the environment
+	if config.APIKey == "" && config.Provider != ProviderOllama {
 		envVar := getAPIKeyEnvVar(config.Provider)
 		config.APIKey = getEnvAPIKey(envVar)
 		if config.APIKey == "" {
@@ -67,6 +76,8 @@ func analyzeWithLLM(logs []LogEntry, config LLMConfig) error {
 		return analyzeWithOpenAI(logs, config)
 	case ProviderGemini:
 		return analyzeWithGemini(logs, config)
+	case ProviderOllama:
+		return analyzeWithOllama(logs, config)
 	default:
 		return fmt.Errorf("unsupported LLM provider: %s", config.Provider)
 	}
@@ -81,6 +92,9 @@ func getAPIKeyEnvVar(provider LLMProvider) string {
 		return "OPENAI_API_KEY"
 	case ProviderGemini:
 		return "GEMINI_API_KEY"
+	case ProviderOllama:
+		// Ollama is locally hosted and doesn't require an API key
+		return ""
 	default:
 		return ""
 	}
@@ -589,6 +603,45 @@ type GeminiError struct {
 	Status  string `json:"status"`
 }
 
+//
+// Ollama Implementation
+//
+
+// OllamaRequest represents the request structure for Ollama API
+type OllamaRequest struct {
+	Model     string              `json:"model"`
+	Messages  []OllamaMessage     `json:"messages"`
+	Stream    bool                `json:"stream"`
+	Options   OllamaOptions       `json:"options,omitempty"`
+}
+
+// OllamaMessage represents a message in the Ollama API request
+type OllamaMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// OllamaOptions represents configuration options for the Ollama API
+type OllamaOptions struct {
+	Temperature float64 `json:"temperature,omitempty"`
+	TopP        float64 `json:"top_p,omitempty"`
+	NumPredict  int     `json:"num_predict,omitempty"`
+}
+
+// OllamaResponse represents the response structure from Ollama API
+type OllamaResponse struct {
+	Model       string `json:"model"`
+	CreatedAt   string `json:"created_at"`
+	Message     OllamaMessage `json:"message"`
+	Done        bool   `json:"done"`
+	TotalDuration int64 `json:"total_duration"`
+	LoadDuration  int64 `json:"load_duration"`
+	PromptEvalCount int  `json:"prompt_eval_count"`
+	PromptEvalDuration int64 `json:"prompt_eval_duration"`
+	EvalCount      int  `json:"eval_count"`
+	EvalDuration   int64 `json:"eval_duration"`
+}
+
 // analyzeWithGemini sends log data to Gemini API for analysis
 func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	// Get model info if available
@@ -704,6 +757,115 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	for _, part := range geminiResponse.Candidates[0].Content.Parts {
 		analysisText += part.Text
 	}
+
+	// Display the analysis and handle clipboard copy
+	return displayAndCopyAnalysis(analysisText)
+}
+
+// analyzeWithOllama sends log data to a local Ollama instance for analysis
+func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
+	// Get model info if available
+	modelName := config.Model
+	if modelName == "" {
+		modelName = getDefaultModel(config.Provider)
+	}
+	
+	// Try to get the human-friendly model name
+	modelInfo, found := GetModelInfo(config.Provider, modelName)
+	if found {
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+			config.Provider, modelInfo.Name, modelName)
+	} else {
+		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+			config.Provider, modelName)
+	}
+
+	// Prepare prompts and logs
+	prompt, err := prepareAnalysisPrompts(logs, config)
+	if err != nil {
+		return err
+	}
+
+	// Combine system and user prompts for Ollama
+	systemMessage := OllamaMessage{
+		Role:    "system",
+		Content: prompt.SystemPrompt,
+	}
+	
+	userMessage := OllamaMessage{
+		Role:    "user",
+		Content: prompt.UserPrompt,
+	}
+
+	// Create the request
+	request := OllamaRequest{
+		Model:    modelName,
+		Messages: []OllamaMessage{systemMessage, userMessage},
+		Stream:   false,
+		Options: OllamaOptions{
+			Temperature: 0.3,
+			NumPredict:  4000,
+		},
+	}
+
+	// Convert request to JSON
+	requestJSON, err := json.Marshal(request)
+	if err != nil {
+		return fmt.Errorf("error creating request: %v", err)
+	}
+
+	// Create HTTP request using the configured Ollama host
+	apiURL := OllamaHost
+	if !strings.HasSuffix(apiURL, "/") {
+		apiURL += "/"
+	}
+	apiURL += "api/chat"
+	
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestJSON))
+	if err != nil {
+		return fmt.Errorf("error creating HTTP request: %v", err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Create HTTP client with the configured timeout
+	client := &http.Client{
+		Timeout: time.Duration(OllamaTimeout) * time.Second,
+	}
+
+	// Send request
+	fmt.Printf("Sending request to local Ollama instance (timeout: %d seconds)...\n", OllamaTimeout)
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("error sending request to Ollama: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response: %v", err)
+	}
+
+	// Check if response is successful
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error from Ollama (status %d): %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var ollamaResponse OllamaResponse
+	err = json.Unmarshal(body, &ollamaResponse)
+	if err != nil {
+		return fmt.Errorf("error parsing response: %v", err)
+	}
+
+	// Extract the analysis text from the response
+	analysisText := ollamaResponse.Message.Content
+
+	// Display timing information
+	totalTimeSeconds := float64(ollamaResponse.TotalDuration) / 1e9
+	fmt.Printf("Request completed in %.2f seconds\n", totalTimeSeconds)
 
 	// Display the analysis and handle clipboard copy
 	return displayAndCopyAnalysis(analysisText)

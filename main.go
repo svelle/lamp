@@ -34,6 +34,8 @@ var (
 	maxEntries     int
 	problem        string
 	thinkingBudget int
+	ollamaHost     string
+	ollamaTimeout  int
 	interactive    bool
 	verbose        bool
 	quiet          bool
@@ -281,13 +283,15 @@ func init() {
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
 		cmd.Flags().BoolVar(&aiAnalyze, "ai-analyze", false, "Analyze logs using AI")
 		cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for LLM provider")
-		cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai, gemini)")
+		cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai, gemini, ollama)")
 		cmd.Flags().StringVar(&llmModel, "llm-model", "", "LLM model to use (defaults to provider-specific default)")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
 		cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to LLM")
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
 		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for extended thinking mode (only supported by some models)")
+		cmd.Flags().StringVar(&ollamaHost, "ollama-host", "http://localhost:11434", "Ollama server URL (only for ollama provider)")
+		cmd.Flags().IntVar(&ollamaTimeout, "ollama-timeout", 120, "Timeout in seconds for Ollama requests (only for ollama provider)")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
@@ -299,7 +303,7 @@ func init() {
 
 		// Add LLM provider completion
 		registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return []string{"anthropic", "openai", "gemini"}, cobra.ShellCompDirectiveNoFileComp
+			return []string{"anthropic", "openai", "gemini", "ollama"}, cobra.ShellCompDirectiveNoFileComp
 		})
 		
 		// Add LLM model completion based on selected provider
@@ -379,15 +383,18 @@ func processLogs(logs []LogEntry) error {
 			provider = ProviderAnthropic // Default to Anthropic
 		}
 
-		// Get key from flag or env
-		apiKeyValue := apiKey
-		if apiKeyValue == "" {
-			envVar := getAPIKeyEnvVar(provider)
-			apiKeyValue = os.Getenv(envVar)
-			
+		// Skip API key check for Ollama which doesn't need one
+		if provider != ProviderOllama {
+			// Get key from flag or env
+			apiKeyValue := apiKey
 			if apiKeyValue == "" {
-				return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable", 
-					provider, envVar)
+				envVar := getAPIKeyEnvVar(provider)
+				apiKeyValue = os.Getenv(envVar)
+				
+				if apiKeyValue == "" {
+					return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable", 
+						provider, envVar)
+				}
 			}
 		}
 	}
@@ -441,14 +448,22 @@ func processLogs(logs []LogEntry) error {
 	case aiAnalyze:
 		// Get provider from flag (we already validated the API key above)
 		// Validate llmProvider flag
-		supportedProviders := []string{"anthropic", "openai", "gemini"}
+		supportedProviders := []string{"anthropic", "openai", "gemini", "ollama"}
 		if !contains(supportedProviders, llmProvider) {
 			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
 		}
 		
+		// If using Ollama, set the Ollama-related variables from the flags
+		if llmProvider == "ollama" {
+			// Set the package's Ollama variables to the values from the flags
+			OllamaHost = ollamaHost
+			OllamaTimeout = ollamaTimeout
+		}
+		
 		provider := LLMProvider(llmProvider)
 		apiKeyValue := apiKey
-		if apiKeyValue == "" {
+		// Only get API key for providers that need one
+		if provider != ProviderOllama && apiKeyValue == "" {
 			apiKeyValue = os.Getenv(getAPIKeyEnvVar(provider))
 		}
 		

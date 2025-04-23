@@ -87,6 +87,16 @@ var ProviderModels = map[LLMProvider][]ModelInfo{
 			IsDefault:   false,
 		},
 	},
+	// For Ollama, these are just common examples - users can specify any model they have installed locally
+	ProviderOllama: {
+		{
+			ID:          "llama3",
+			Name:        "Llama 3",
+			Description: "Example: Meta's Llama 3 model (use the name of any model you have installed)",
+			MaxTokens:   4000,
+			IsDefault:   true,
+		},
+	},
 }
 
 // GetDefaultModel returns the default model for a provider

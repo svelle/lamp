@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Markdown support for AI analysis results
-- Support for multiple LLM providers (Anthropic, OpenAI, and Gemini)
+- Support for multiple LLM providers (Anthropic, OpenAI, Gemini, and local Ollama)
 - New `--llm-provider` flag to select the LLM provider
 - New `--llm-model` flag to specify LLM model with auto-completion
-- Implemented OpenAI and Gemini API integrations for log analysis
+- New `--ollama-host` flag to specify custom Ollama server URL
+- New `--ollama-timeout` flag to configure timeout for local Ollama requests
+- Implemented OpenAI, Gemini, and Ollama API integrations for log analysis
 - Created central models registry for easier model management
 
 ### Changed
