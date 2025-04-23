@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Run: `go run main.go`
 - Test all: `go test ./...`
 - Test single: `go test -v -run TestFunctionName`
-- Lint: `golint ./...`
+- Lint: `golangci-lint run`
 
 ## Code Style Guidelines
 - Formatting: Use Go standard formatting (`gofmt` or `go fmt`)
@@ -24,3 +24,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Always sort log entries by timestamp
 - UI components use tview and tcell packages
 - Maintain backward compatibility with existing log formats
+
+## Linting Guidelines
+- All code must pass `golangci-lint run` without errors
+- Fix lint warnings before committing
+- Avoid disabling linters unless absolutely necessary
