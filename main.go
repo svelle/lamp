@@ -343,6 +343,27 @@ func processLogs(logs []LogEntry) error {
 	// Note: Filtering is already applied during log parsing in parseLogFile
 	// so by the time logs reach this function, they're already filtered
 	
+	// Check for AI analysis and API key first
+	if aiAnalyze {
+		// Get provider from flag
+		provider := LLMProvider(llmProvider)
+		if provider == "" {
+			provider = ProviderAnthropic // Default to Anthropic
+		}
+
+		// Get key from flag or env
+		apiKeyValue := apiKey
+		if apiKeyValue == "" {
+			envVar := getAPIKeyEnvVar(provider)
+			apiKeyValue = os.Getenv(envVar)
+			
+			if apiKeyValue == "" {
+				return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable", 
+					provider, envVar)
+			}
+		}
+	}
+	
 	// Apply trim if requested
 	if trim {
 		logger.Info("Starting deduplication", "count", len(logs))
@@ -390,22 +411,14 @@ func processLogs(logs []LogEntry) error {
 	// Display logs in the requested format
 	switch {
 	case aiAnalyze:
-		// Get provider from flag
+		// Get provider from flag (we already validated the API key above)
 		provider := LLMProvider(llmProvider)
 		if provider == "" {
 			provider = ProviderAnthropic // Default to Anthropic
 		}
-
-		// Get key from flag or env
 		apiKeyValue := apiKey
 		if apiKeyValue == "" {
-			envVar := getAPIKeyEnvVar(provider)
-			apiKeyValue = os.Getenv(envVar)
-			
-			if apiKeyValue == "" {
-				return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable", 
-					provider, envVar)
-			}
+			apiKeyValue = os.Getenv(getAPIKeyEnvVar(provider))
 		}
 		
 		// If trim was used, ask if user wants to send all remaining lines
