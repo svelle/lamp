@@ -338,6 +338,16 @@ func main() {
 	}
 }
 
+// contains checks if a string slice contains a given string
+func contains(slice []string, str string) bool {
+	for _, item := range slice {
+		if item == str {
+			return true
+		}
+	}
+	return false
+}
+
 // processLogs handles the common log processing logic
 func processLogs(logs []LogEntry) error {
 	// Note: Filtering is already applied during log parsing in parseLogFile
@@ -414,7 +424,7 @@ func processLogs(logs []LogEntry) error {
 		// Get provider from flag (we already validated the API key above)
 		// Validate llmProvider flag
 		supportedProviders := []string{"anthropic", "openai"}
-		if !isValidProvider(llmProvider, supportedProviders) {
+		if !contains(supportedProviders, llmProvider) {
 			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
 		}
 		
