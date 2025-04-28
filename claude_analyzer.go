@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	
+
 	"github.com/atotto/clipboard"
 )
 
@@ -120,6 +120,9 @@ Analyze the provided logs and provide a comprehensive report including:
 1. A high-level summary of what's happening in the logs
 2. Identification of any errors, warnings, or critical issues
 3. Patterns or trends you notice
+ - Look for sudden spikes in errors within a short time
+ - Look for network connectivity errors
+ - Look for user_id or channel_id values that might be common across errors.
 4. Potential root causes for any problems
 5. Recommendations for further investigation or resolution
 
@@ -283,7 +286,7 @@ Focus on actionable insights and be specific about what you find.`
 
 	// Capture analysis output in a buffer for potential clipboard copy
 	var analysisBuffer strings.Builder
-	
+
 	// Add markdown header to buffer
 	analysisBuffer.WriteString("# CLAUDE AI LOG ANALYSIS\n\n")
 
@@ -332,12 +335,12 @@ Focus on actionable insights and be specific about what you find.`
 
 	// Display the analysis
 	fmt.Println("\n" + analysisBuffer.String())
-	
+
 	// Prompt the user to copy to clipboard
 	fmt.Println("\n-------------------------------------------------")
 	fmt.Println("The analysis above is formatted in Markdown.")
 	fmt.Print("Would you like to copy it to your clipboard? (y/n): ")
-	
+
 	// Read user input
 	var response string
 	_, err = fmt.Scanln(&response)
@@ -345,7 +348,7 @@ Focus on actionable insights and be specific about what you find.`
 		fmt.Println("Error reading input:", err)
 		return
 	}
-	
+
 	// Check if user wants to copy to clipboard
 	if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
 		err = clipboard.WriteAll(analysisBuffer.String())
