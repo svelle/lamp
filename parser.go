@@ -46,7 +46,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// Parse time range filters if provided
 	var startTime, endTime time.Time

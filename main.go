@@ -27,11 +27,15 @@ var (
 	analyze        bool
 	aiAnalyze      bool
 	apiKey         string
+	llmProvider    string
+	llmModel       string
 	trim           bool
 	trimJSON       string
 	maxEntries     int
 	problem        string
 	thinkingBudget int
+	ollamaHost     string
+	ollamaTimeout  int
 	interactive    bool
 	verbose        bool
 	quiet          bool
@@ -46,7 +50,7 @@ var rootCmd = &cobra.Command{
 	Short: "lamp is a tool for parsing and analyzing Mattermost log files",
 	Long: `lamp (Log Analyser for Mattermost Packet) allows you to parse, filter, and analyze Mattermost log files
 and support packets. It provides various filtering options, analysis capabilities,
-and AI-powered insights using Claude AI.`,
+and AI-powered insights using LLM technology.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		initLogger()
 	},
@@ -277,13 +281,17 @@ func init() {
 		cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
 		cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
-		cmd.Flags().BoolVar(&aiAnalyze, "ai-analyze", false, "Analyze logs using Claude AI")
-		cmd.Flags().StringVar(&apiKey, "api-key", "", "Claude API key for AI analysis")
+		cmd.Flags().BoolVar(&aiAnalyze, "ai-analyze", false, "Analyze logs using AI")
+		cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for LLM provider")
+		cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai, gemini, ollama)")
+		cmd.Flags().StringVar(&llmModel, "llm-model", "", "LLM model to use (defaults to provider-specific default)")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
-		cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to Claude AI")
+		cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to LLM")
 		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
-		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for Claude's extended thinking mode")
+		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for extended thinking mode (only supported by some models)")
+		cmd.Flags().StringVar(&ollamaHost, "ollama-host", "http://localhost:11434", "Ollama server URL (only for ollama provider)")
+		cmd.Flags().IntVar(&ollamaTimeout, "ollama-timeout", 120, "Timeout in seconds for Ollama requests (only for ollama provider)")
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
@@ -291,6 +299,29 @@ func init() {
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+		})
+
+		// Add LLM provider completion
+		registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"anthropic", "openai", "gemini", "ollama"}, cobra.ShellCompDirectiveNoFileComp
+		})
+		
+		// Add LLM model completion based on selected provider
+		registerFlagCompletion(cmd, "llm-model", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			// Get the provider flag value
+			provider := cmd.Flag("llm-provider").Value.String()
+			if provider == "" {
+				provider = "anthropic" // Default provider
+			}
+			
+			// Get available models for this provider
+			var modelNames []string
+			models := GetAvailableModels(LLMProvider(provider))
+			for _, model := range models {
+				modelNames = append(modelNames, model.ID)
+			}
+			
+			return modelNames, cobra.ShellCompDirectiveNoFileComp
 		})
 
 		// Add file completion for flags that expect file paths
@@ -329,10 +360,44 @@ func main() {
 	}
 }
 
+// contains checks if a string slice contains a given string
+func contains(slice []string, str string) bool {
+	for _, item := range slice {
+		if item == str {
+			return true
+		}
+	}
+	return false
+}
+
 // processLogs handles the common log processing logic
 func processLogs(logs []LogEntry) error {
 	// Note: Filtering is already applied during log parsing in parseLogFile
 	// so by the time logs reach this function, they're already filtered
+	
+	// Check for AI analysis and API key first
+	if aiAnalyze {
+		// Get provider from flag
+		provider := LLMProvider(llmProvider)
+		if provider == "" {
+			provider = ProviderAnthropic // Default to Anthropic
+		}
+
+		// Skip API key check for Ollama which doesn't need one
+		if provider != ProviderOllama {
+			// Get key from flag or env
+			apiKeyValue := apiKey
+			if apiKeyValue == "" {
+				envVar := getAPIKeyEnvVar(provider)
+				apiKeyValue = os.Getenv(envVar)
+				
+				if apiKeyValue == "" {
+					return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable", 
+						provider, envVar)
+				}
+			}
+		}
+	}
 	
 	// Apply trim if requested
 	if trim {
@@ -359,7 +424,7 @@ func processLogs(logs []LogEntry) error {
 		if err != nil {
 			return fmt.Errorf("error creating output file: %v", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		output = file
 		fmt.Printf("Writing output to %s\n", outputFile)
 	}
@@ -381,12 +446,25 @@ func processLogs(logs []LogEntry) error {
 	// Display logs in the requested format
 	switch {
 	case aiAnalyze:
+		// Get provider from flag (we already validated the API key above)
+		// Validate llmProvider flag
+		supportedProviders := []string{"anthropic", "openai", "gemini", "ollama"}
+		if !contains(supportedProviders, llmProvider) {
+			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
+		}
+		
+		// If using Ollama, set the Ollama-related variables from the flags
+		if llmProvider == "ollama" {
+			// Set the package's Ollama variables to the values from the flags
+			OllamaHost = ollamaHost
+			OllamaTimeout = ollamaTimeout
+		}
+		
+		provider := LLMProvider(llmProvider)
 		apiKeyValue := apiKey
-		if apiKeyValue == "" {
-			apiKeyValue = os.Getenv("CLAUDE_API_KEY")
-			if apiKeyValue == "" {
-				return fmt.Errorf("Claude API key is required for AI analysis")
-			}
+		// Only get API key for providers that need one
+		if provider != ProviderOllama && apiKeyValue == "" {
+			apiKeyValue = os.Getenv(getAPIKeyEnvVar(provider))
 		}
 		
 		// If trim was used, ask if user wants to send all remaining lines
@@ -405,7 +483,23 @@ func processLogs(logs []LogEntry) error {
 			}
 		}
 		
-		analyzeWithClaude(logs, apiKeyValue, entriesForAnalysis, problem, thinkingBudget)
+		// Configure LLM settings
+		model := llmModel
+		if model == "" {
+			model = GetDefaultModel(provider)
+		}
+		config := LLMConfig{
+			Provider:       provider,
+			Model:          model,
+			APIKey:         apiKeyValue,
+			MaxEntries:     entriesForAnalysis,
+			Problem:        problem,
+			ThinkingBudget: thinkingBudget,
+		}
+		
+		if err := analyzeWithLLM(logs, config); err != nil {
+			return fmt.Errorf("error during LLM analysis: %v", err)
+		}
 	case analyze:
 		analyzeAndDisplayStats(logs, output, !trim)
 	case jsonOutput:
