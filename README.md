@@ -85,6 +85,7 @@ lamp <command> [flags]
 - `--thinking-budget <tokens>`: Token budget for Claude's extended thinking mode
 - `--ollama-host <url>`: Ollama server URL (default: http://localhost:11434)
 - `--ollama-timeout <seconds>`: Ollama request timeout (default: 120)
+- `--include-config`: Include Mattermost configuration in AI analysis (support-packet only)
 
 #### Filtering Options
 - `--search <term>`: Search term to filter logs
@@ -264,8 +265,11 @@ Support packet AI analysis:
 export ANTHROPIC_API_KEY=YOUR_API_KEY
 lamp support-packet mattermost_support_packet.zip --ai-analyze
 
-# Use Ollama for local analysis
-lamp support-packet mattermost_support_packet.zip --ai-analyze --llm-provider ollama
+# Include Mattermost configuration for comprehensive analysis
+lamp support-packet mattermost_support_packet.zip --ai-analyze --include-config
+
+# Use Ollama for local analysis with configuration
+lamp support-packet mattermost_support_packet.zip --ai-analyze --include-config --llm-provider ollama
 ```
 
 ## Output Formats
@@ -309,14 +313,21 @@ The parser supports both traditional Mattermost log formats and the newer JSON-f
 
 ## Support Packet Processing
 
-The tool can extract and parse log files from Mattermost support packets. Support packets are ZIP files that contain server logs, configuration information, and diagnostic data. When using the `--support-packet` option, the tool will:
+The tool can extract and parse log files from Mattermost support packets. Support packets are ZIP files that contain server logs, configuration information, and diagnostic data. When using the `support-packet` command, the tool will:
 
 1. Extract log files from the ZIP archive
 2. Parse each log file
 3. Apply any specified filters (search term, level, user)
 4. Display the combined results
 
-This is particularly useful for analyzing logs from multi-node Mattermost deployments where each node's logs are included in the support packet.
+For AI analysis, you can also include the Mattermost configuration:
+
+- Use `--include-config` to extract and include `sanitized_config.json` in the AI analysis
+- This provides additional context about server configuration, helping AI identify misconfigurations
+- Configuration data is only included when explicitly requested with the flag
+- The AI can then correlate log issues with configuration settings for more comprehensive insights
+
+This is particularly useful for analyzing logs from multi-node Mattermost deployments where each node's logs are included in the support packet, and when you need to understand how configuration affects the observed issues.
 
 ## Log Analysis
 
@@ -375,6 +386,7 @@ The `--ai-analyze` option uses AI to provide an intelligent analysis of your log
 - Identifies potential root causes for errors
 - Offers recommendations for resolution
 - Gives context and insights that might not be obvious from statistical analysis
+- For support packets: optionally includes Mattermost configuration data (`--include-config`) to identify misconfigurations and provide configuration-specific recommendations
 
 **Supported LLM providers:**
 - **Anthropic Claude** (default) - Get API key from [console.anthropic.com](https://console.anthropic.com/)
