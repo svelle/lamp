@@ -39,6 +39,8 @@ var (
 	interactive    bool
 	verbose        bool
 	quiet          bool
+	verboseAnalysis bool
+	rawOutput      bool
 
 	// Global logger
 	logger *slog.Logger
@@ -58,7 +60,7 @@ and AI-powered insights using LLM technology.`,
 
 var fileCmd = &cobra.Command{
 	Use:   "file [path...]",
-	Short: "Parse one or more Mattermost log files",
+	Short: "Parse and analyze one or more Mattermost log files",
 	Args:  cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
@@ -133,7 +135,7 @@ var fileCmd = &cobra.Command{
 
 var notificationCmd = &cobra.Command{
 	Use:   "notification [path]",
-	Short: "Parse a Mattermost notification log file",
+	Short: "Parse and analyze a Mattermost notification log file",
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
@@ -158,7 +160,7 @@ var notificationCmd = &cobra.Command{
 
 var supportPacketCmd = &cobra.Command{
 	Use:   "support-packet [path]",
-	Short: "Parse a Mattermost support packet zip file",
+	Short: "Parse and analyze a Mattermost support packet zip file",
 	Args:  cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
@@ -295,6 +297,8 @@ func init() {
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
+		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis with all sections")
+		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw log entries instead of analysis (old default behavior)")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -338,7 +342,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "verbose-analysis", "raw"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
@@ -501,11 +505,14 @@ func processLogs(logs []LogEntry) error {
 			return fmt.Errorf("error during LLM analysis: %v", err)
 		}
 	case analyze:
-		analyzeAndDisplayStats(logs, output, !trim)
+		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
 	case jsonOutput:
 		displayLogsJSON(logs, output)
-	default:
+	case rawOutput:
 		displayLogsPretty(logs, output)
+	default:
+		// Default to compact analysis instead of dumping all logs
+		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
 	}
 
 	return nil

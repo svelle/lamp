@@ -79,14 +79,19 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
+		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
+		
+		// Enable raw output to test log content
+		rawOutput = true
 		
 		// Call the RunE function from fileCmd
 		err := fileCmd.RunE(cmd, filePaths)
 		require.NoError(t, err)
 		
-		// Restore stdout
+		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
+		rawOutput = false // Reset for other tests
 		
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
@@ -113,18 +118,21 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
+		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
 		
-		// Set the level filter to info
+		// Set the level filter to info and enable raw output
 		levelFilter = "info"
+		rawOutput = true
 		
 		// Call the RunE function from fileCmd
 		err := fileCmd.RunE(cmd, filePaths)
 		require.NoError(t, err)
 		
-		// Restore stdout and reset levelFilter
+		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
 		levelFilter = "" // Reset for other tests
+		rawOutput = false // Reset for other tests
 		
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
@@ -230,18 +238,21 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
+		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
 		
-		// Enable trimming
+		// Enable trimming and raw output
 		trim = true
+		rawOutput = true
 		
 		// Call the RunE function from fileCmd with just the duplicates file
 		err = fileCmd.RunE(cmd, []string{dupFile})
 		require.NoError(t, err)
 		
-		// Restore stdout and reset trim flag
+		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
 		trim = false // Reset for other tests
+		rawOutput = false // Reset for other tests
 		
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
@@ -293,18 +304,21 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze log patterns")
+		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis")
 		
-		// Enable analysis
+		// Enable analysis with verbose output
 		analyze = true
+		verboseAnalysis = true
 		
 		// Call the RunE function from fileCmd
 		err = fileCmd.RunE(cmd, []string{analyzeFile})
 		require.NoError(t, err)
 		
-		// Restore stdout and reset analyze flag
+		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
 		analyze = false // Reset for other tests
+		verboseAnalysis = false // Reset for other tests
 		
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
@@ -313,13 +327,12 @@ func TestMultiFileCommand(t *testing.T) {
 		
 		// Test for presence of analysis sections
 		assert.Contains(t, output, "=== MATTERMOST LOG ANALYSIS ===")
-		assert.Contains(t, output, "Basic Statistics:")
-		assert.Contains(t, output, "Log Level Distribution:")
+		assert.Contains(t, output, "Levels:")
 		assert.Contains(t, output, "Activity by Hour:")
 		assert.Contains(t, output, "Activity by Day of Week:")
 		
 		// Check for specific data
-		assert.Contains(t, output, "Total Log Entries: 7")
+		assert.Contains(t, output, "7 entries")
 		assert.Contains(t, output, "ERROR")
 		assert.Contains(t, output, "INFO")
 		
@@ -327,9 +340,9 @@ func TestMultiFileCommand(t *testing.T) {
 		assert.Contains(t, output, "2025-01-01")
 		assert.Contains(t, output, "2025-01-03")
 		
-		// Check for day of week information
-		assert.Contains(t, output, "Wednesday")
-		assert.Contains(t, output, "Thursday")
-		assert.Contains(t, output, "Friday")
+		// Check for day of week information (abbreviated format)
+		assert.Contains(t, output, "Wed")
+		assert.Contains(t, output, "Thu")
+		assert.Contains(t, output, "Fri")
 	})
 }

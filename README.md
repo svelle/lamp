@@ -1,13 +1,17 @@
 # lamp 
 
-`lamp` (Log Analyser for Mattermost Packet) is a command-line tool for parsing, filtering, and displaying Mattermost log files with enhanced readability.
+`lamp` (Log Analyser for Mattermost Packet) is a command-line tool for parsing, filtering, and analyzing Mattermost log files with enhanced readability and intelligent insights.
 
 ## Features
 
+- **Smart analysis by default**: Automatically provides compact insights instead of overwhelming log dumps
 - Parse both traditional and JSON-formatted Mattermost log entries
-- Filter logs by search term, log level, and username
-- Display logs in a human-readable colored format or as JSON
-- Support for various Mattermost timestamp formats
+- Filter logs by search term, log level, username, and time ranges
+- **Intelligent log analysis** with statistics, patterns, and trends
+- **AI-powered analysis** using Claude, GPT, Gemini, or local models via Ollama
+- Display logs in human-readable colored format, JSON, or export to CSV
+- **Interactive terminal UI** for exploring large log files
+- Support for various Mattermost timestamp formats and support packets
 
 ## Installation
 
@@ -57,37 +61,51 @@ lamp <command> [flags]
 
 ### Commands
 
-- `file <path...>`: Parse one or more Mattermost log files
-- `support-packet <path>`: Parse a Mattermost support packet zip file
+- `file <path...>`: Parse and analyze one or more Mattermost log files
+- `notification <path>`: Parse and analyze a Mattermost notification log file  
+- `support-packet <path>`: Parse and analyze a Mattermost support packet zip file
 - `version`: Print version and build information
 - `completion`: Generate shell completion scripts
 - `help`: Help about any command
 
 ### Options
 
-- `--ai-analyze`: Analyze logs using AI
-- `--analyze`: Analyze logs and show statistics
+#### Analysis Options
+- `--ai-analyze`: Analyze logs using AI (Claude, GPT, Gemini, or Ollama)
+- `--analyze`: Show compact statistical analysis (same as default)
+- `--verbose-analysis`: Show detailed analysis with full sections
+- `--raw`: Output raw log entries instead of analysis
+
+#### AI Configuration  
 - `--api-key <key>`: API key for LLM provider
-- `--llm-provider <provider>`: LLM provider to use (anthropic, openai) (default: anthropic)
-- `--llm-model <model>`: LLM model to use (defaults to provider-specific default)
-- `--csv <path>`: Export logs to CSV file at specified path
-- `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
-- `--help`: Show help information for any command
-- `--interactive`: Launch interactive TUI mode for exploring logs
-- `--json`: Output in JSON format
-- `--level <level>`: Filter logs by level (info, error, debug, etc.)
-- `--max-entries <num>`: Maximum number of log entries to send to Claude AI (default: 100)
-- `--output <path>`: Save output to file instead of stdout
-- `--problem "<description>"`: Description of the problem you're investigating (helps guide AI analysis)
-- `--quiet`: Only output errors (suppresses info, warn, and debug messages)
-- `--regex <pattern>`: Regular expression pattern to filter logs
-- `--search <term>`: Search term to filter logs
-- `--start <time>`: Filter logs after this time (format: 2006-01-02 15:04:05.000)
+- `--llm-provider <provider>`: LLM provider (anthropic, openai, gemini, ollama) (default: anthropic)
+- `--llm-model <model>`: LLM model to use (autocompletes based on provider)
+- `--max-entries <num>`: Maximum log entries to send to AI (default: 100)
+- `--problem "<description>"`: Problem description to guide AI analysis
 - `--thinking-budget <tokens>`: Token budget for Claude's extended thinking mode
-- `--trim`: Remove entries with duplicate information
-- `--trim-json <path>`: Write deduplicated logs to a JSON file at specified path
+- `--ollama-host <url>`: Ollama server URL (default: http://localhost:11434)
+- `--ollama-timeout <seconds>`: Ollama request timeout (default: 120)
+
+#### Filtering Options
+- `--search <term>`: Search term to filter logs
+- `--regex <pattern>`: Regular expression pattern to filter logs  
+- `--level <level>`: Filter by log level (info, error, debug, etc.) - supports autocomplete
 - `--user <username>`: Filter logs by username
+- `--start <time>`: Filter logs after this time (format: 2006-01-02 15:04:05.000)
+- `--end <time>`: Filter logs before this time (format: 2006-01-02 15:04:05.000)
+- `--trim`: Remove entries with duplicate information
+- `--trim-json <path>`: Write deduplicated logs to JSON file
+
+#### Output Options
+- `--json`: Output in JSON format
+- `--csv <path>`: Export logs to CSV file - supports file path autocomplete
+- `--output <path>`: Save output to file - supports file path autocomplete
+- `--interactive`: Launch interactive TUI mode for exploring logs
+
+#### Logging Options
 - `--verbose`: Enable debug level logging output
+- `--quiet`: Only output errors (suppresses info, warn, and debug messages)
+- `--help`: Show help information for any command
 
 ### Shell Completion
 
@@ -112,32 +130,46 @@ After enabling completion, you can use:
 
 ### Examples
 
-Parse a single log file:
+#### Basic Usage (New Default Behavior)
+
+Analyze a single log file (shows compact analysis by default):
 ```bash
 lamp file mattermost.log
 ```
 
-Parse multiple log files:
+Analyze multiple log files:
 ```bash
 lamp file mattermost.log mattermost2.log mattermost3.log
 ```
 
-Parse a support packet:
+Analyze a support packet:
 ```bash
 lamp support-packet mattermost_support_packet.zip
 ```
 
-Filter logs containing the word "error":
+Get detailed analysis with full sections:
+```bash
+lamp file mattermost.log --verbose-analysis
+```
+
+Get raw log output (old default behavior):
+```bash
+lamp file mattermost.log --raw
+```
+
+#### Filtering Examples
+
+Filter logs containing "error" (still shows analysis by default):
 ```bash
 lamp file mattermost.log --search "error"
 ```
 
-Show only error-level logs:
+Show analysis of only error-level logs:
 ```bash
 lamp file mattermost.log --level error
 ```
 
-Filter logs by user and output as JSON:
+Filter logs by user and export as JSON:
 ```bash
 lamp file mattermost.log --user admin --json
 ```
@@ -146,6 +178,13 @@ Combine multiple filters:
 ```bash
 lamp file mattermost.log --level error --search "database"
 ```
+
+Get raw filtered logs instead of analysis:
+```bash
+lamp file mattermost.log --level error --raw
+```
+
+#### Advanced Filtering
 
 Filter logs by time range:
 ```bash
@@ -157,14 +196,28 @@ Use regular expressions for advanced filtering:
 lamp file mattermost.log --regex "error.*database"
 ```
 
-Export logs to CSV for spreadsheet analysis:
+#### Export and Output Options
+
+Export analysis to CSV for spreadsheet analysis:
 ```bash
 lamp file mattermost.log --csv logs_export.csv
 ```
 
-Save output to a file:
+Save analysis to a file:
 ```bash
-lamp file mattermost.log --analyze --output analysis_report.txt
+lamp file mattermost.log --output analysis_report.txt
+```
+
+Export raw logs to CSV:
+```bash
+lamp file mattermost.log --raw --csv raw_logs.csv
+```
+
+#### Interactive and AI Analysis
+
+Launch interactive TUI mode for exploring logs:
+```bash
+lamp file mattermost.log --interactive
 ```
 
 Show version information:
@@ -172,12 +225,7 @@ Show version information:
 lamp version
 ```
 
-Launch interactive TUI mode for exploring logs:
-```bash
-lamp file mattermost.log --interactive
-```
-
-Analyze logs using AI:
+#### AI-Powered Analysis
 ```bash
 # Using Anthropic Claude (default provider)
 lamp file mattermost.log --ai-analyze --api-key YOUR_API_KEY
@@ -186,38 +234,56 @@ lamp file mattermost.log --ai-analyze --api-key YOUR_API_KEY
 export ANTHROPIC_API_KEY=YOUR_API_KEY
 lamp file mattermost.log --ai-analyze
 
-# Using OpenAI as the provider
+# Using OpenAI GPT models
 export OPENAI_API_KEY=YOUR_API_KEY
 lamp file mattermost.log --ai-analyze --llm-provider openai
 
-# Using a specific provider and model
-lamp file mattermost.log --ai-analyze --llm-provider anthropic --llm-model claude-3-sonnet-latest
+# Using Google Gemini models
+export GEMINI_API_KEY=YOUR_API_KEY
+lamp file mattermost.log --ai-analyze --llm-provider gemini
+
+# Using local Ollama models (no API key required)
+lamp file mattermost.log --ai-analyze --llm-provider ollama --llm-model llama3
+
+# Using a specific provider and model with autocomplete
+lamp file mattermost.log --ai-analyze --llm-provider anthropic --llm-model claude-opus-4-20250514
 
 # Specify maximum number of log entries to analyze
 lamp file mattermost.log --ai-analyze --max-entries 200
 
 # Provide a problem statement to guide the analysis
 lamp file mattermost.log --ai-analyze --problem "Users are reporting authentication failures"
+
+# Use extended thinking mode with Claude (more detailed analysis)
+lamp file mattermost.log --ai-analyze --thinking-budget 10000
 ```
 
-Analyze support packet logs using AI:
+Support packet AI analysis:
 ```bash
-# Using Anthropic Claude (default provider)
-lamp support-packet mattermost_support_packet.zip --ai-analyze --api-key YOUR_API_KEY
-
-# Using environment variable
+# Analyze entire support packet with AI
 export ANTHROPIC_API_KEY=YOUR_API_KEY
 lamp support-packet mattermost_support_packet.zip --ai-analyze
 
-# Using OpenAI
-lamp support-packet mattermost_support_packet.zip --ai-analyze --llm-provider openai --api-key YOUR_OPENAI_API_KEY
+# Use Ollama for local analysis
+lamp support-packet mattermost_support_packet.zip --ai-analyze --llm-provider ollama
 ```
 
-## Output Format
+## Output Formats
 
-### Pretty Print (Default)
+### Analysis (Default)
 
-The default output format includes:
+The default output provides a **compact analysis** instead of raw log dumps:
+- **Header**: Entry count, duration, and error rate
+- **Log levels**: Distribution with colored counts  
+- **Top sources**: Most active log sources
+- **Top errors**: Most frequent error messages (truncated for readability)
+- **Peak hours**: Busiest time periods
+
+Use `--verbose-analysis` for detailed analysis with full activity charts and patterns.
+
+### Raw Log Output
+
+When using the `--raw` flag, output includes:
 - Colored timestamps and log levels for better readability
 - Highlighted source/caller information
 - Structured display of user information and additional details
@@ -254,16 +320,21 @@ This is particularly useful for analyzing logs from multi-node Mattermost deploy
 
 ## Log Analysis
 
-The `--analyze` option provides a high-level overview of the log data, including:
+**Compact analysis** (now the default) provides a quick overview:
+- Basic statistics (total entries, time range, duration, error rate)
+- Log level distribution with colored counts
+- Top 3 log sources and error messages  
+- Top 3 peak activity hours
 
-- Basic statistics (total entries, time range, duration)
-- Log level distribution and error rate
-- Top log sources and active users
-- Most frequent error messages
-- Activity patterns by hour
-- Common message patterns
+**Detailed analysis** (`--verbose-analysis`) includes additional insights:
+- Full 24-hour activity charts with colored bars (skips zero-activity hours)
+- Day-of-week activity patterns (when spanning multiple days)
+- Monthly activity patterns (when spanning multiple months)
+- Only shows sections with relevant data
 
-This analysis helps quickly identify trends, issues, and patterns in large log files without having to manually review thousands of entries.
+**Explicit analysis** (`--analyze`) is the same as the default compact analysis.
+
+This smart analysis helps quickly identify trends, issues, and patterns in large log files without having to manually review thousands of entries or deal with overwhelming terminal output.
 
 ## Advanced Filtering
 
@@ -305,19 +376,24 @@ The `--ai-analyze` option uses AI to provide an intelligent analysis of your log
 - Offers recommendations for resolution
 - Gives context and insights that might not be obvious from statistical analysis
 
-Supported LLM providers:
-- Anthropic Claude (default) - requires an API key from [https://console.anthropic.com/](https://console.anthropic.com/)
-- OpenAI - requires an API key from [https://platform.openai.com/](https://platform.openai.com/)
+**Supported LLM providers:**
+- **Anthropic Claude** (default) - Get API key from [console.anthropic.com](https://console.anthropic.com/)
+- **OpenAI GPT** - Get API key from [platform.openai.com](https://platform.openai.com/)  
+- **Google Gemini** - Get API key from [console.cloud.google.com](https://console.cloud.google.com/)
+- **Ollama** - Local models, no API key required ([ollama.ai](https://ollama.ai/))
 
-You can provide the API key in two ways:
-1. Using the `--api-key` command line flag
-2. Setting the appropriate environment variable:
-   - For Anthropic: `ANTHROPIC_API_KEY`
-   - For OpenAI: `OPENAI_API_KEY`
+**API key configuration:**
+1. Command line flag: `--api-key YOUR_KEY`
+2. Environment variables:
+   - `ANTHROPIC_API_KEY` for Claude
+   - `OPENAI_API_KEY` for GPT models
+   - `GEMINI_API_KEY` for Gemini models
+   - No key needed for Ollama
 
-You can customize the LLM provider and model:
-- `--llm-provider`: Choose the LLM provider (anthropic, openai)
-- `--llm-model`: Specify a particular model (defaults to a provider-specific default)
+**Provider and model selection:**
+- `--llm-provider`: Choose provider (anthropic, openai, gemini, ollama)
+- `--llm-model`: Specify model with **tab autocomplete** based on selected provider
+- Models automatically complete based on your chosen provider
 
 Note: When using AI analysis, a limited number of log entries are sent to the LLM provider to stay within token limits. By default, the tool sends up to 100 entries, but you can adjust this with the `--max-entries` flag.
 
@@ -334,14 +410,17 @@ These flags are mutually exclusive - if both are provided, `--quiet` takes prece
 
 Examples:
 ```bash
-# Default behavior - show info and error messages
+# Default behavior - show compact analysis with info and error messages
 lamp file logfile.txt
 
-# Show detailed debug information
+# Show detailed debug information  
 lamp file logfile.txt --verbose
 
 # Only show errors
 lamp file logfile.txt --quiet
+
+# Get raw logs with detailed debug information
+lamp file logfile.txt --raw --verbose
 ```
 ## License
 

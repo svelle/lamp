@@ -292,13 +292,12 @@ func TestDisplayAnalysis(t *testing.T) {
 
 	t.Run("display analysis output formatting", func(t *testing.T) {
 		var buf bytes.Buffer
-		displayAnalysis(analysis, &buf, false, 10)
+		displayAnalysis(analysis, &buf, false, 10, true)
 		output := buf.String()
 		
 		// Check that all expected sections are present
 		assert.Contains(t, output, "=== MATTERMOST LOG ANALYSIS ===")
-		assert.Contains(t, output, "Basic Statistics:")
-		assert.Contains(t, output, "Log Level Distribution:")
+		assert.Contains(t, output, "Levels:")
 		assert.Contains(t, output, "Activity by Hour:")
 		assert.Contains(t, output, "Activity by Day of Week:")
 		assert.Contains(t, output, "Activity by Month:")
@@ -312,18 +311,17 @@ func TestDisplayAnalysis(t *testing.T) {
 		assert.Contains(t, output, "ERROR")
 		
 		// Check error rate
-		assert.Contains(t, output, "Error Rate: 20.00%")
+		assert.Contains(t, output, "Error rate: 20.0%")
 	})
 
 	t.Run("display analysis with deduplication info", func(t *testing.T) {
 		var buf bytes.Buffer
-		displayAnalysis(analysis, &buf, true, 8) // 8 unique entries out of 10 total
+		displayAnalysis(analysis, &buf, true, 8, true) // 8 unique entries out of 10 total
 		output := buf.String()
 		
-		// Check deduplication info
-		assert.Contains(t, output, "Unique Log Entries: 8")
-		assert.Contains(t, output, "Total Log Entries: 10")
-		assert.Contains(t, output, "Deduplication Ratio")
+		// Check deduplication info (verbose analysis shows entries count and duration)
+		assert.Contains(t, output, "10 entries (8 unique)")
+		assert.Contains(t, output, "1421h45m0s")
 	})
 
 	t.Run("display time range condition for day and month charts", func(t *testing.T) {
@@ -335,7 +333,7 @@ func TestDisplayAnalysis(t *testing.T) {
 		}
 		
 		var buf bytes.Buffer
-		displayAnalysis(shortAnalysis, &buf, false, 10)
+		displayAnalysis(shortAnalysis, &buf, false, 10, true)
 		output := buf.String()
 		
 		// Day of week chart should NOT be present for short time ranges
@@ -370,16 +368,16 @@ func TestAnalyzeAndDisplayStats(t *testing.T) {
 
 	t.Run("display stats without duplicates", func(t *testing.T) {
 		var buf bytes.Buffer
-		analyzeAndDisplayStats(logs, &buf, false)
+		analyzeAndDisplayStats(logs, &buf, false, false)
 		output := buf.String()
 		
-		assert.Contains(t, output, "Total Log Entries: 3")
+		assert.Contains(t, output, "3 entries")
 		assert.NotContains(t, output, "Deduplication Ratio")
 	})
 
 	t.Run("handle empty logs", func(t *testing.T) {
 		var buf bytes.Buffer
-		analyzeAndDisplayStats([]LogEntry{}, &buf, false)
+		analyzeAndDisplayStats([]LogEntry{}, &buf, false, false)
 		output := buf.String()
 		
 		assert.Contains(t, output, "No log entries to analyze.")
@@ -405,11 +403,9 @@ func TestAnalyzeAndDisplayStats(t *testing.T) {
 		}
 		
 		var buf bytes.Buffer
-		analyzeAndDisplayStats(duplicateLogs, &buf, true)
+		analyzeAndDisplayStats(duplicateLogs, &buf, true, false)
 		output := buf.String()
 		
-		assert.Contains(t, output, "Unique Log Entries: 2")
-		assert.Contains(t, output, "Total Log Entries: 5")
-		assert.Contains(t, output, "Deduplication Ratio")
+		assert.Contains(t, output, "5 entries (2 unique)")
 	})
 }
