@@ -484,9 +484,13 @@ func processLogs(logs []LogEntry) error {
 		}
 		
 		// Configure LLM settings
+		model := llmModel
+		if model == "" {
+			model = GetDefaultModel(provider)
+		}
 		config := LLMConfig{
 			Provider:       provider,
-			Model:          llmModel,
+			Model:          model,
 			APIKey:         apiKeyValue,
 			MaxEntries:     entriesForAnalysis,
 			Problem:        problem,
