@@ -9,16 +9,14 @@ import (
 	"strings"
 )
 
-// supportPacketConfigContent stores the content of sanitized_config.json for AI analysis
-var supportPacketConfigContent string
-
-// clearSupportPacketConfig resets the config content for a new analysis
-func clearSupportPacketConfig() {
-	supportPacketConfigContent = ""
+// SupportPacketResult contains the parsed logs and optional configuration content
+type SupportPacketResult struct {
+	Logs         []LogEntry
+	ConfigContent string
 }
 
 // parseSupportPacket extracts and parses logs from a Mattermost support packet zip file
-func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
+func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) (*SupportPacketResult, error) {
 	// Open the zip file
 	reader, err := zip.OpenReader(zipFilePath)
 	if err != nil {
@@ -26,7 +24,10 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	}
 	defer func() { _ = reader.Close() }()
 
-	var allLogs []LogEntry
+	result := &SupportPacketResult{
+		Logs:         []LogEntry{},
+		ConfigContent: "",
+	}
 
 	// Create a temporary directory to extract files
 	tempDir, err := os.MkdirTemp("", "lamp_support_packet")
@@ -76,26 +77,25 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 			}
 
 			// Add to our collection
-			allLogs = append(allLogs, logs...)
+			result.Logs = append(result.Logs, logs...)
 		}
 	}
 
-	// Store the config path globally if we extracted it for AI analysis
 	// Read the config content now before temp directory cleanup if needed for AI analysis
 	if configPath != "" && aiAnalyze && includeConfig {
 		if configData, err := os.ReadFile(configPath); err == nil {
-			supportPacketConfigContent = string(configData)
+			result.ConfigContent = string(configData)
 			logger.Debug("Loaded sanitized_config.json content for AI analysis", "size", len(configData))
 		} else {
 			logger.Warn("Failed to read sanitized_config.json content", "path", configPath, "error", err)
 		}
 	}
 
-	if len(allLogs) == 0 {
+	if len(result.Logs) == 0 {
 		fmt.Println("No log files found in the support packet or no entries matched your criteria.")
 	}
 
-	return allLogs, nil
+	return result, nil
 }
 
 // extractZipFile extracts a single file from a zip archive to the specified path

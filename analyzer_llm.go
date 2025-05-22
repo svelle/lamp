@@ -57,7 +57,7 @@ type AnalysisPrompt struct {
 }
 
 // analyzeWithLLM routes the log analysis to the appropriate LLM provider
-func analyzeWithLLM(logs []LogEntry, config LLMConfig) error {
+func analyzeWithLLM(logs []LogEntry, config LLMConfig, configContent string) error {
 	// If the API key is not provided and we're not using Ollama (which doesn't need a key), 
 	// try to get it from the environment
 	if config.APIKey == "" && config.Provider != ProviderOllama {
@@ -71,13 +71,13 @@ func analyzeWithLLM(logs []LogEntry, config LLMConfig) error {
 	// Route to the appropriate provider
 	switch config.Provider {
 	case ProviderAnthropic:
-		return analyzeWithAnthropic(logs, config)
+		return analyzeWithAnthropic(logs, config, configContent)
 	case ProviderOpenAI:
-		return analyzeWithOpenAI(logs, config)
+		return analyzeWithOpenAI(logs, config, configContent)
 	case ProviderGemini:
-		return analyzeWithGemini(logs, config)
+		return analyzeWithGemini(logs, config, configContent)
 	case ProviderOllama:
-		return analyzeWithOllama(logs, config)
+		return analyzeWithOllama(logs, config, configContent)
 	default:
 		return fmt.Errorf("unsupported LLM provider: %s", config.Provider)
 	}
@@ -154,7 +154,7 @@ func formatLogsForAnalysis(logs []LogEntry) (string, int, bool) {
 }
 
 // prepareAnalysisPrompts generates system and user prompts for log analysis
-func prepareAnalysisPrompts(logs []LogEntry, config LLMConfig) (AnalysisPrompt, error) {
+func prepareAnalysisPrompts(logs []LogEntry, config LLMConfig, configContent string) (AnalysisPrompt, error) {
 	var prompt AnalysisPrompt
 	
 	// If maxEntries is not set (0), use the default
@@ -179,8 +179,8 @@ func prepareAnalysisPrompts(logs []LogEntry, config LLMConfig) (AnalysisPrompt, 
 
 	// Include sanitized_config.json if available from support packet
 	var configText string
-	if supportPacketConfigContent != "" {
-		configText = supportPacketConfigContent
+	if configContent != "" {
+		configText = configContent
 		logger.Debug("Including sanitized_config.json in AI analysis", "size", len(configText))
 	}
 
@@ -351,7 +351,7 @@ type AnthropicError struct {
 }
 
 // analyzeWithAnthropic sends log data to Anthropic API for analysis
-func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
+func analyzeWithAnthropic(logs []LogEntry, config LLMConfig, configContent string) error {
 	// Get model info if available
 	modelName := config.Model
 	if modelName == "" {
@@ -369,7 +369,7 @@ func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Prepare prompts and logs
-	prompt, err := prepareAnalysisPrompts(logs, config)
+	prompt, err := prepareAnalysisPrompts(logs, config, configContent)
 	if err != nil {
 		return err
 	}
@@ -679,7 +679,7 @@ type OllamaResponse struct {
 }
 
 // analyzeWithGemini sends log data to Gemini API for analysis
-func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
+func analyzeWithGemini(logs []LogEntry, config LLMConfig, configContent string) error {
 	// Get model info if available
 	modelName := config.Model
 	if modelName == "" {
@@ -697,7 +697,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Prepare prompts and logs
-	prompt, err := prepareAnalysisPrompts(logs, config)
+	prompt, err := prepareAnalysisPrompts(logs, config, configContent)
 	if err != nil {
 		return err
 	}
@@ -799,7 +799,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 }
 
 // analyzeWithOllama sends log data to a local Ollama instance for analysis
-func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
+func analyzeWithOllama(logs []LogEntry, config LLMConfig, configContent string) error {
 	// Get model info if available
 	modelName := config.Model
 	if modelName == "" {
@@ -817,7 +817,7 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Prepare prompts and logs
-	prompt, err := prepareAnalysisPrompts(logs, config)
+	prompt, err := prepareAnalysisPrompts(logs, config, configContent)
 	if err != nil {
 		return err
 	}
@@ -908,7 +908,7 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 }
 
 // analyzeWithOpenAI sends log data to OpenAI API for analysis
-func analyzeWithOpenAI(logs []LogEntry, config LLMConfig) error {
+func analyzeWithOpenAI(logs []LogEntry, config LLMConfig, configContent string) error {
 	// Get model info if available
 	modelName := config.Model
 	if modelName == "" {
@@ -926,7 +926,7 @@ func analyzeWithOpenAI(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Prepare prompts and logs
-	prompt, err := prepareAnalysisPrompts(logs, config)
+	prompt, err := prepareAnalysisPrompts(logs, config, configContent)
 	if err != nil {
 		return err
 	}

@@ -79,7 +79,7 @@ var fileCmd = &cobra.Command{
 				return fmt.Errorf("error parsing log file: %v", err)
 			}
 
-			return processLogs(logs)
+			return processLogs(logs, "")
 		} else {
 			// Multiple files mode
 			var allLogs []LogEntry
@@ -129,7 +129,7 @@ var fileCmd = &cobra.Command{
 			})
 
 			logger.Info("Finished processing files", "total_files", len(args), "total_entries", len(allLogs))
-			return processLogs(allLogs)
+			return processLogs(allLogs, "")
 		}
 	},
 }
@@ -155,7 +155,7 @@ var notificationCmd = &cobra.Command{
 			return fmt.Errorf("error parsing notification log file: %v", err)
 		}
 
-		return processLogs(logs)
+		return processLogs(logs, "")
 	},
 }
 
@@ -175,19 +175,16 @@ var supportPacketCmd = &cobra.Command{
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
 		}
 
-		// Clear any previous support packet config path
-		clearSupportPacketConfig()
-
-		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		result, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
 
 		if verbose {
-			fmt.Printf("Debug: processing %d log entries\n", len(logs))
+			fmt.Printf("Debug: processing %d log entries\n", len(result.Logs))
 		}
 
-		return processLogs(logs)
+		return processLogs(result.Logs, result.ConfigContent)
 	},
 }
 
@@ -380,7 +377,7 @@ func contains(slice []string, str string) bool {
 }
 
 // processLogs handles the common log processing logic
-func processLogs(logs []LogEntry) error {
+func processLogs(logs []LogEntry, configContent string) error {
 	// Note: Filtering is already applied during log parsing in parseLogFile
 	// so by the time logs reach this function, they're already filtered
 	
@@ -506,7 +503,7 @@ func processLogs(logs []LogEntry) error {
 			ThinkingBudget: thinkingBudget,
 		}
 		
-		if err := analyzeWithLLM(logs, config); err != nil {
+		if err := analyzeWithLLM(logs, config, configContent); err != nil {
 			return fmt.Errorf("error during LLM analysis: %v", err)
 		}
 	case analyze:
