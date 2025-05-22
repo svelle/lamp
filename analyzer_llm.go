@@ -192,6 +192,9 @@ Analyze the provided logs and provide a comprehensive report including:
 1. A high-level summary of what's happening in the logs
 2. Identification of any errors, warnings, or critical issues
 3. Patterns or trends you notice
+ - Look for sudden spikes in errors within a short time
+ - Look for network connectivity errors
+ - Look for user_id or channel_id values that might be common across errors.
 4. Potential root causes for any problems
 5. Recommendations for further investigation or resolution
 
