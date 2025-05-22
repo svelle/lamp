@@ -9,6 +9,14 @@ import (
 	"strings"
 )
 
+// supportPacketConfigContent stores the content of sanitized_config.json for AI analysis
+var supportPacketConfigContent string
+
+// clearSupportPacketConfig resets the config content for a new analysis
+func clearSupportPacketConfig() {
+	supportPacketConfigContent = ""
+}
+
 // parseSupportPacket extracts and parses logs from a Mattermost support packet zip file
 func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	// Open the zip file
@@ -26,6 +34,23 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 		return nil, fmt.Errorf("failed to create temp directory: %v", err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }() // Clean up when done
+
+	// Extract sanitized_config.json if needed for AI analysis
+	var configPath string
+	if aiAnalyze && includeConfig {
+		for _, file := range reader.File {
+			if strings.HasSuffix(file.Name, "sanitized_config.json") {
+				configPath = filepath.Join(tempDir, "sanitized_config.json")
+				if err := extractZipFile(file, configPath); err != nil {
+					logger.Warn("Failed to extract sanitized_config.json from support packet", "file", file.Name, "error", err)
+					configPath = "" // Reset if extraction failed
+				} else {
+					logger.Debug("Extracted sanitized_config.json for AI analysis", "path", configPath)
+				}
+				break
+			}
+		}
+	}
 
 	// Look for log files in the zip
 	for _, file := range reader.File {
@@ -52,6 +77,17 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 
 			// Add to our collection
 			allLogs = append(allLogs, logs...)
+		}
+	}
+
+	// Store the config path globally if we extracted it for AI analysis
+	// Read the config content now before temp directory cleanup if needed for AI analysis
+	if configPath != "" && aiAnalyze && includeConfig {
+		if configData, err := os.ReadFile(configPath); err == nil {
+			supportPacketConfigContent = string(configData)
+			logger.Debug("Loaded sanitized_config.json content for AI analysis", "size", len(configData))
+		} else {
+			logger.Warn("Failed to read sanitized_config.json content", "path", configPath, "error", err)
 		}
 	}
 

@@ -39,6 +39,7 @@ var (
 	interactive    bool
 	verbose        bool
 	quiet          bool
+	includeConfig  bool
 
 	// Global logger
 	logger *slog.Logger
@@ -172,6 +173,9 @@ var supportPacketCmd = &cobra.Command{
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
 		}
 
+		// Clear any previous support packet config path
+		clearSupportPacketConfig()
+
 		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing support packet: %v", err)
@@ -295,6 +299,7 @@ func init() {
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
+		cmd.Flags().BoolVar(&includeConfig, "include-config", false, "Include configuration in AI analysis (support-packet only)")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -338,7 +343,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "include-config"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})

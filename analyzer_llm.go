@@ -177,16 +177,26 @@ func prepareAnalysisPrompts(logs []LogEntry, config LLMConfig) (AnalysisPrompt, 
 	prompt.LogText = logText
 	prompt.HasDuplicates = hasDuplicates
 
-	// Create appropriate preface based on duplication
+	// Include sanitized_config.json if available from support packet
+	var configText string
+	if supportPacketConfigContent != "" {
+		configText = supportPacketConfigContent
+		logger.Debug("Including sanitized_config.json in AI analysis", "size", len(configText))
+	}
+
+	// Create appropriate preface based on duplication and config inclusion
 	entryDescription := fmt.Sprintf("%d Mattermost server log entries", len(logsToAnalyze))
 	if hasDuplicates {
 		entryDescription = fmt.Sprintf("%d unique Mattermost server log entries representing %d total log entries",
 			len(logsToAnalyze), totalEntries)
 	}
+	if configText != "" {
+		entryDescription += " and the sanitized Mattermost configuration"
+	}
 	prompt.Description = entryDescription
 
 	// Create the system prompt
-	prompt.SystemPrompt = `You are an expert log analyzer for Mattermost server logs. 
+	systemPromptBase := `You are an expert log analyzer for Mattermost server logs. 
 Analyze the provided logs and provide a comprehensive report including:
 
 1. A high-level summary of what's happening in the logs
@@ -202,6 +212,17 @@ Format your entire response in Markdown for easy reading and sharing. Use approp
 
 Focus on actionable insights and be specific about what you find.`
 
+	if configText != "" {
+		systemPromptBase += `
+
+When configuration data is provided, also consider:
+- Configuration settings that might be related to the issues in the logs
+- Misconfigurations that could be causing problems
+- Recommended configuration changes based on the log patterns`
+	}
+
+	prompt.SystemPrompt = systemPromptBase
+
 	// Use a more concise prompt with thinking mode
 	if config.ThinkingBudget > 0 {
 		prompt.SystemPrompt = `You are an expert log analyzer for Mattermost server logs. Analyze these logs and identify issues, patterns, and solutions. Format your entire response in Markdown.`
@@ -210,26 +231,38 @@ Focus on actionable insights and be specific about what you find.`
 		if hasDuplicates {
 			prompt.SystemPrompt += ` Some log entries may be marked with repetition counts, indicating they appeared multiple times.`
 		}
+		// Add information about configuration if included
+		if configText != "" {
+			prompt.SystemPrompt += ` Configuration data is also provided - use it to identify misconfigurations and provide configuration recommendations.`
+		}
 	}
 
 	// Create the user prompt
+	var userPromptText string
 	if config.Problem != "" {
 		if config.ThinkingBudget > 0 {
-			prompt.UserPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s",
+			userPromptText = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s",
 				config.Problem, entryDescription, logText)
 		} else {
-			prompt.UserPrompt = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.",
+			userPromptText = fmt.Sprintf("I'm investigating this problem: %s\n\nHere are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs focusing on the problem I described.",
 				config.Problem, entryDescription, logText)
 		}
 	} else {
 		if config.ThinkingBudget > 0 {
-			prompt.UserPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s",
+			userPromptText = fmt.Sprintf("Here are %s to analyze:\n\n%s",
 				entryDescription, logText)
 		} else {
-			prompt.UserPrompt = fmt.Sprintf("Here are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.",
+			userPromptText = fmt.Sprintf("Here are %s to analyze:\n\n%s\n\nPlease provide a detailed analysis of these logs.",
 				entryDescription, logText)
 		}
 	}
+
+	// Add configuration data if available
+	if configText != "" {
+		userPromptText += "\n\n## Mattermost Configuration (sanitized_config.json)\n\n```json\n" + configText + "\n```"
+	}
+
+	prompt.UserPrompt = userPromptText
 
 	return prompt, nil
 }
