@@ -234,7 +234,7 @@ func TestMultiFileLogProcessing(t *testing.T) {
 	// Create temporary directory for test log files
 	tempDir, err := os.MkdirTemp("", "lamp-test-")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test log files with different timestamps
 	logFiles := []struct {
@@ -278,7 +278,7 @@ func TestMultiFileLogProcessing(t *testing.T) {
 			require.NoError(t, err)
 		}
 		
-		f.Close()
+		_ = f.Close()
 	}
 
 	// Test parsing multiple log files

@@ -16,7 +16,7 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	if err != nil {
 		return nil, fmt.Errorf("failed to open support packet: %v", err)
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 
 	var allLogs []LogEntry
 
@@ -25,7 +25,7 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp directory: %v", err)
 	}
-	defer os.RemoveAll(tempDir) // Clean up when done
+	defer func() { _ = os.RemoveAll(tempDir) }() // Clean up when done
 
 	// Look for log files in the zip
 	for _, file := range reader.File {
@@ -69,14 +69,14 @@ func extractZipFile(file *zip.File, destPath string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	// Create the destination file
 	dest, err := os.Create(destPath)
 	if err != nil {
 		return err
 	}
-	defer dest.Close()
+	defer func() { _ = dest.Close() }()
 
 	// Copy the contents
 	_, err = io.Copy(dest, src)

@@ -43,7 +43,7 @@ type CountedItem struct {
 // analyzeAndDisplayStats analyzes log entries and displays statistics
 func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 	if len(logs) == 0 {
-		fmt.Fprintln(writer, "No log entries to analyze.")
+		_, _ = fmt.Fprintln(writer, "No log entries to analyze.")
 		return
 	}
 
@@ -292,65 +292,65 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 	subHeaderColor := "\033[1;33m" // Bold Yellow
 	resetColor := "\033[0m"
 
-	fmt.Fprintf(writer, "\n%s=== MATTERMOST LOG ANALYSIS ===%s\n\n", headerColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "\n%s=== MATTERMOST LOG ANALYSIS ===%s\n\n", headerColor, resetColor)
 
 	// Basic statistics
-	fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
 	if isDeduplicated {
-		fmt.Fprintf(writer, "Unique Log Entries: %d\n", uniqueEntries)
-		fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n",
+		_, _ = fmt.Fprintf(writer, "Unique Log Entries: %d\n", uniqueEntries)
+		_, _ = fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n",
 			analysis.TotalEntries, analysis.TotalEntries-uniqueEntries)
-		fmt.Fprintf(writer, "Deduplication Ratio: %.2f:1\n", float64(analysis.TotalEntries)/float64(uniqueEntries))
+		_, _ = fmt.Fprintf(writer, "Deduplication Ratio: %.2f:1\n", float64(analysis.TotalEntries)/float64(uniqueEntries))
 	} else {
-		fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
+		_, _ = fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
 	}
-	fmt.Fprintf(writer, "Time Range: %s to %s\n",
+	_, _ = fmt.Fprintf(writer, "Time Range: %s to %s\n",
 		analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
 		analysis.TimeRange.End.Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(writer, "Duration: %s\n\n", analysis.TimeRange.End.Sub(analysis.TimeRange.Start).Round(time.Second))
+	_, _ = fmt.Fprintf(writer, "Duration: %s\n\n", analysis.TimeRange.End.Sub(analysis.TimeRange.Start).Round(time.Second))
 
 	// Log level distribution
-	fmt.Fprintf(writer, "%sLog Level Distribution:%s\n", subHeaderColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "%sLog Level Distribution:%s\n", subHeaderColor, resetColor)
 	for level, count := range analysis.LevelCounts {
 		percentage := float64(count) / float64(analysis.TotalEntries) * 100
 		levelColor := getLevelColor(level)
-		fmt.Fprintf(writer, "%s%s%s: %d (%.1f%%)\n", levelColor, level, resetColor, count, percentage)
+		_, _ = fmt.Fprintf(writer, "%s%s%s: %d (%.1f%%)\n", levelColor, level, resetColor, count, percentage)
 	}
-	fmt.Fprintf(writer, "Error Rate: %.2f%%\n\n", analysis.ErrorRate)
+	_, _ = fmt.Fprintf(writer, "Error Rate: %.2f%%\n\n", analysis.ErrorRate)
 
 	// Top sources
-	fmt.Fprintf(writer, "%sTop Log Sources:%s\n", subHeaderColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "%sTop Log Sources:%s\n", subHeaderColor, resetColor)
 	for i, source := range analysis.TopSources {
 		if i < 5 {
-			fmt.Fprintf(writer, "%d. %s (%d entries)\n", i+1, source.Item, source.Count)
+			_, _ = fmt.Fprintf(writer, "%d. %s (%d entries)\n", i+1, source.Item, source.Count)
 		}
 	}
-	fmt.Fprintln(writer)
+	_, _ = fmt.Fprintln(writer)
 
 	// Top users (if any)
 	if len(analysis.TopUsers) > 0 {
-		fmt.Fprintf(writer, "%sTop Active Users:%s\n", subHeaderColor, resetColor)
+		_, _ = fmt.Fprintf(writer, "%sTop Active Users:%s\n", subHeaderColor, resetColor)
 		for i, user := range analysis.TopUsers {
 			if i < 5 {
-				fmt.Fprintf(writer, "%d. %s (%d entries)\n", i+1, user.Item, user.Count)
+				_, _ = fmt.Fprintf(writer, "%d. %s (%d entries)\n", i+1, user.Item, user.Count)
 			}
 		}
-		fmt.Fprintln(writer)
+		_, _ = fmt.Fprintln(writer)
 	}
 
 	// Top error messages (if any)
 	if len(analysis.TopErrorMessages) > 0 {
-		fmt.Fprintf(writer, "%sTop Error Messages:%s\n", subHeaderColor, resetColor)
+		_, _ = fmt.Fprintf(writer, "%sTop Error Messages:%s\n", subHeaderColor, resetColor)
 		for i, err := range analysis.TopErrorMessages {
 			if i < 5 {
-				fmt.Fprintf(writer, "%d. %s (%d occurrences)\n", i+1, err.Item, err.Count)
+				_, _ = fmt.Fprintf(writer, "%d. %s (%d occurrences)\n", i+1, err.Item, err.Count)
 			}
 		}
-		fmt.Fprintln(writer)
+		_, _ = fmt.Fprintln(writer)
 	}
 
 	// Busiest hours
-	fmt.Fprintf(writer, "%sActivity by Hour:%s\n", subHeaderColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "%sActivity by Hour:%s\n", subHeaderColor, resetColor)
 	// Find the max count for scaling
 	maxCount := 0
 	for _, hour := range analysis.BusiestHours {
@@ -385,14 +385,14 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		// Get dominant log level color for this hour
 		levelColor := getDominantLevelColor(analysis.HourLevelCounts[hour], count)
 		
-		fmt.Fprintf(writer, "%02d:00: %s%s%s (%d)\n", hour, levelColor, bar, resetColor, count)
+		_, _ = fmt.Fprintf(writer, "%02d:00: %s%s%s (%d)\n", hour, levelColor, bar, resetColor, count)
 	}
-	fmt.Fprintln(writer)
+	_, _ = fmt.Fprintln(writer)
 	
 	// Activity by day of week (if time range spans multiple days)
 	timeSpan := analysis.TimeRange.End.Sub(analysis.TimeRange.Start)
 	if timeSpan.Hours() >= 24 && len(analysis.ActivityByDayOfWeek) > 0 {
-		fmt.Fprintf(writer, "%sActivity by Day of Week:%s\n", subHeaderColor, resetColor)
+		_, _ = fmt.Fprintf(writer, "%sActivity by Day of Week:%s\n", subHeaderColor, resetColor)
 		// Find the max count for scaling
 		maxCount = 0
 		for _, day := range analysis.ActivityByDayOfWeek {
@@ -416,14 +416,14 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 			// Get dominant log level color for this day
 			levelColor := getDominantLevelColor(analysis.DayLevelCounts[day], count)
 			
-			fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", day, levelColor, bar, resetColor, count)
+			_, _ = fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", day, levelColor, bar, resetColor, count)
 		}
-		fmt.Fprintln(writer)
+		_, _ = fmt.Fprintln(writer)
 	}
 	
 	// Activity by month (if time range spans multiple months)
 	if timeSpan.Hours() >= 24*30 && len(analysis.ActivityByMonth) > 0 {
-		fmt.Fprintf(writer, "%sActivity by Month:%s\n", subHeaderColor, resetColor)
+		_, _ = fmt.Fprintf(writer, "%sActivity by Month:%s\n", subHeaderColor, resetColor)
 		// Find the max count for scaling
 		maxCount = 0
 		for _, month := range analysis.ActivityByMonth {
@@ -447,43 +447,43 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 			// Get dominant log level color for this month
 			levelColor := getDominantLevelColor(analysis.MonthLevelCounts[month], count)
 			
-			fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", month, levelColor, bar, resetColor, count)
+			_, _ = fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", month, levelColor, bar, resetColor, count)
 		}
-		fmt.Fprintln(writer)
+		_, _ = fmt.Fprintln(writer)
 	}
 
 	// Common message patterns
-	fmt.Fprintf(writer, "%sCommon Message Patterns:%s\n", subHeaderColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "%sCommon Message Patterns:%s\n", subHeaderColor, resetColor)
 	for i, pattern := range analysis.CommonPatterns {
 		if i < 5 {
-			fmt.Fprintf(writer, "%d. \"%s\" (%d occurrences)\n", i+1, pattern.Item, pattern.Count)
+			_, _ = fmt.Fprintf(writer, "%d. \"%s\" (%d occurrences)\n", i+1, pattern.Item, pattern.Count)
 		}
 	}
-	fmt.Fprintln(writer)
+	_, _ = fmt.Fprintln(writer)
 	
 	// Notification statistics (if present)
 	if len(analysis.NotificationTypes) > 0 {
-		fmt.Fprintf(writer, "%sNotification Statistics:%s\n", subHeaderColor, resetColor)
+		_, _ = fmt.Fprintf(writer, "%sNotification Statistics:%s\n", subHeaderColor, resetColor)
 		
 		// Notification types
 		if len(analysis.NotificationTypes) > 0 {
-			fmt.Fprintf(writer, "Notification Types:\n")
+			_, _ = fmt.Fprintf(writer, "Notification Types:\n")
 			for _, nt := range analysis.NotificationTypes {
-				fmt.Fprintf(writer, "  %s: %d\n", nt.Item, nt.Count)
+				_, _ = fmt.Fprintf(writer, "  %s: %d\n", nt.Item, nt.Count)
 			}
 		}
 		
 		// Notification statuses
 		if len(analysis.NotificationStatuses) > 0 {
-			fmt.Fprintf(writer, "Notification Statuses:\n")
+			_, _ = fmt.Fprintf(writer, "Notification Statuses:\n")
 			for _, ns := range analysis.NotificationStatuses {
-				fmt.Fprintf(writer, "  %s: %d\n", ns.Item, ns.Count)
+				_, _ = fmt.Fprintf(writer, "  %s: %d\n", ns.Item, ns.Count)
 			}
 		}
-		fmt.Fprintln(writer)
+		_, _ = fmt.Fprintln(writer)
 	}
 
-	fmt.Fprintf(writer, "\n%s=== END OF ANALYSIS ===%s\n\n", headerColor, resetColor)
+	_, _ = fmt.Fprintf(writer, "\n%s=== END OF ANALYSIS ===%s\n\n", headerColor, resetColor)
 }
 
 // getLevelColor returns the ANSI color code for a log level

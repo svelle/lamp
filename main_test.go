@@ -20,7 +20,7 @@ func TestMultiFileCommand(t *testing.T) {
 	// Create temporary directory for test log files
 	tempDir, err := os.MkdirTemp("", "lamp-cmd-test-")
 	require.NoError(t, err)
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Create test log files with different timestamps
 	logFiles := []struct {
@@ -64,7 +64,7 @@ func TestMultiFileCommand(t *testing.T) {
 			require.NoError(t, err)
 		}
 		
-		f.Close()
+		_ = f.Close()
 	}
 
 	// Test the file command with multiple files
@@ -85,7 +85,7 @@ func TestMultiFileCommand(t *testing.T) {
 		require.NoError(t, err)
 		
 		// Restore stdout
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		
 		var buf bytes.Buffer
@@ -122,7 +122,7 @@ func TestMultiFileCommand(t *testing.T) {
 		require.NoError(t, err)
 		
 		// Restore stdout and reset levelFilter
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		levelFilter = "" // Reset for other tests
 		
@@ -218,7 +218,7 @@ func TestMultiFileCommand(t *testing.T) {
 			_, err = f.WriteString(`info [2025-01-01 11:00:00.000 Z] System check complete caller="system/checks.go:42" status="ok"` + "\n")
 			require.NoError(t, err)
 		}
-		f.Close()
+		_ = f.Close()
 		
 		// Store original stdout
 		oldStdout := os.Stdout
@@ -239,7 +239,7 @@ func TestMultiFileCommand(t *testing.T) {
 		require.NoError(t, err)
 		
 		// Restore stdout and reset trim flag
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		trim = false // Reset for other tests
 		
@@ -280,7 +280,7 @@ func TestMultiFileCommand(t *testing.T) {
 			_, err = f.WriteString(line + "\n")
 			require.NoError(t, err)
 		}
-		f.Close()
+		_ = f.Close()
 		
 		// Store original stdout
 		oldStdout := os.Stdout
@@ -302,7 +302,7 @@ func TestMultiFileCommand(t *testing.T) {
 		require.NoError(t, err)
 		
 		// Restore stdout and reset analyze flag
-		w.Close()
+		_ = w.Close()
 		os.Stdout = oldStdout
 		analyze = false // Reset for other tests
 		

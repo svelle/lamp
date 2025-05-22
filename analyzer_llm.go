@@ -408,7 +408,7 @@ func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
 	if err != nil {
 		return fmt.Errorf("error sending request to Anthropic API: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
@@ -430,7 +430,7 @@ func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
 
 	// Check for API error
 	if anthropicResponse.Error != nil {
-		return fmt.Errorf("Anthropic API error: %s - %s",
+		return fmt.Errorf("anthropic API error: %s - %s",
 			anthropicResponse.Error.Type,
 			anthropicResponse.Error.Message)
 	}
@@ -721,7 +721,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	if err != nil {
 		return fmt.Errorf("error sending request to Gemini API: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
@@ -743,7 +743,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 
 	// Check for API error
 	if geminiResponse.Error != nil {
-		return fmt.Errorf("Gemini API error (code %d): %s", 
+		return fmt.Errorf("gemini API error (code %d): %s", 
 			geminiResponse.Error.Code, geminiResponse.Error.Message)
 	}
 
@@ -840,7 +840,7 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 	if err != nil {
 		return fmt.Errorf("error sending request to Ollama: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)
@@ -948,7 +948,7 @@ func analyzeWithOpenAI(logs []LogEntry, config LLMConfig) error {
 	if err != nil {
 		return fmt.Errorf("error sending request to OpenAI API: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response
 	body, err := io.ReadAll(resp.Body)

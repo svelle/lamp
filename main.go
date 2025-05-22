@@ -424,7 +424,7 @@ func processLogs(logs []LogEntry) error {
 		if err != nil {
 			return fmt.Errorf("error creating output file: %v", err)
 		}
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		output = file
 		fmt.Printf("Writing output to %s\n", outputFile)
 	}

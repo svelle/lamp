@@ -13,11 +13,25 @@ type ModelInfo struct {
 var ProviderModels = map[LLMProvider][]ModelInfo{
 	ProviderAnthropic: {
 		{
+			ID:          "claude-sonnet-4-20250514",
+			Name:        "Claude 4 Sonnet",
+			Description: "Latest Sonnet model with enhanced capabilities",
+			MaxTokens:   16000,
+			IsDefault:   true,
+		},
+		{
+			ID:          "claude-opus-4-20250514",
+			Name:        "Claude 4 Opus",
+			Description: "Most capable Claude 4 model for complex analysis",
+			MaxTokens:   32000,
+			IsDefault:   false,
+		},
+		{
 			ID:          "claude-3-5-haiku-latest",
 			Name:        "Claude 3.5 Haiku",
 			Description: "Fast and cost-effective model for simple tasks",
 			MaxTokens:   4000,
-			IsDefault:   true,
+			IsDefault:   false,
 		},
 		{
 			ID:          "claude-3-5-sonnet-latest",

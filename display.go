@@ -16,7 +16,7 @@ func writeLogsToJSON(logs []LogEntry, filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
@@ -43,7 +43,7 @@ const (
 // displayLogsPretty outputs logs in a human-readable colored format
 func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 	if len(logs) == 0 {
-		fmt.Fprintln(writer, "No log entries found matching your criteria.")
+		_, _ = fmt.Fprintln(writer, "No log entries found matching your criteria.")
 		return
 	}
 
@@ -67,7 +67,7 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 		}
 
 		// Print the formatted log entry
-		fmt.Fprintf(writer, "%s [%s] %s%s%s",
+		_, _ = fmt.Fprintf(writer, "%s [%s] %s%s%s",
 			colorCyan+timestamp+colorReset,
 			levelColored,
 			colorBold+log.Source+colorReset,
@@ -77,64 +77,64 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 
 		// Print duplicate count if more than 1
 		if log.DuplicateCount > 1 {
-			fmt.Fprintf(writer, " %s(repeated %d times)%s", colorYellow, log.DuplicateCount, colorReset)
+			_, _ = fmt.Fprintf(writer, " %s(repeated %d times)%s", colorYellow, log.DuplicateCount, colorReset)
 		}
-		fmt.Fprintln(writer)
+		_, _ = fmt.Fprintln(writer)
 
 		// Print user if available
 		if log.User != "" {
-			fmt.Fprintf(writer, "  %sUser:%s %s\n", colorPurple, colorReset, log.User)
+			_, _ = fmt.Fprintf(writer, "  %sUser:%s %s\n", colorPurple, colorReset, log.User)
 		}
 
 		// Print source if available
 		if log.Source != "" {
-			fmt.Fprintf(writer, "  %sSource:%s %s\n", colorPurple, colorReset, log.Source)
+			_, _ = fmt.Fprintf(writer, "  %sSource:%s %s\n", colorPurple, colorReset, log.Source)
 		}
 		
 		// Print notification-specific fields if available
 		if log.LogSource == "notifications" {
-			fmt.Fprintf(writer, "  %sLog Source:%s %s\n", colorPurple, colorReset, log.LogSource)
+			_, _ = fmt.Fprintf(writer, "  %sLog Source:%s %s\n", colorPurple, colorReset, log.LogSource)
 			
 			if log.AckID != "" {
-				fmt.Fprintf(writer, "  %sAck ID:%s %s\n", colorPurple, colorReset, log.AckID)
+				_, _ = fmt.Fprintf(writer, "  %sAck ID:%s %s\n", colorPurple, colorReset, log.AckID)
 			}
 			
 			if log.Type != "" {
-				fmt.Fprintf(writer, "  %sType:%s %s\n", colorPurple, colorReset, log.Type)
+				_, _ = fmt.Fprintf(writer, "  %sType:%s %s\n", colorPurple, colorReset, log.Type)
 			}
 			
 			if log.Status != "" {
-				fmt.Fprintf(writer, "  %sStatus:%s %s\n", colorPurple, colorReset, log.Status)
+				_, _ = fmt.Fprintf(writer, "  %sStatus:%s %s\n", colorPurple, colorReset, log.Status)
 			}
 		}
 
 		// Print extras if available
 		for key, value := range log.Extras {
-			fmt.Fprintf(writer, "  %s%s:%s %s\n", colorPurple, key, colorReset, value)
+			_, _ = fmt.Fprintf(writer, "  %s%s:%s %s\n", colorPurple, key, colorReset, value)
 		}
 
 		// Add a separator between entries
-		fmt.Fprintln(writer, strings.Repeat("-", 80))
+		_, _ = fmt.Fprintln(writer, strings.Repeat("-", 80))
 	}
 
 	// Print summary
-	fmt.Fprintf(writer, "\nDisplayed %d log entries\n", len(logs))
+	_, _ = fmt.Fprintf(writer, "\nDisplayed %d log entries\n", len(logs))
 }
 
 // displayLogsJSON outputs logs in JSON format
 func displayLogsJSON(logs []LogEntry, writer io.Writer) {
 	if len(logs) == 0 {
-		fmt.Fprintln(writer, "[]")
+		_, _ = fmt.Fprintln(writer, "[]")
 		return
 	}
 
 	output, err := json.MarshalIndent(logs, "", "  ")
 	if err != nil {
-		fmt.Fprintf(writer, "Error formatting JSON: %v\n", err)
+		_, _ = fmt.Fprintf(writer, "Error formatting JSON: %v\n", err)
 		return
 	}
 
-	fmt.Fprintln(writer, string(output))
+	_, _ = fmt.Fprintln(writer, string(output))
 }
 
 // exportToCSV exports log entries to a CSV file
@@ -143,7 +143,7 @@ func exportToCSV(logs []LogEntry, filePath string) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
