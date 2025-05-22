@@ -39,6 +39,7 @@ var (
 	interactive    bool
 	verbose        bool
 	quiet          bool
+	verboseAnalysis bool
 
 	// Global logger
 	logger *slog.Logger
@@ -295,6 +296,7 @@ func init() {
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
+		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis with all sections")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -338,7 +340,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "verbose-analysis"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
@@ -501,7 +503,7 @@ func processLogs(logs []LogEntry) error {
 			return fmt.Errorf("error during LLM analysis: %v", err)
 		}
 	case analyze:
-		analyzeAndDisplayStats(logs, output, !trim)
+		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
 	case jsonOutput:
 		displayLogsJSON(logs, output)
 	default:
