@@ -39,6 +39,7 @@ var (
 	interactive    bool
 	verbose        bool
 	quiet          bool
+	includeConfig  bool
 	verboseAnalysis bool
 	rawOutput      bool
 
@@ -78,7 +79,7 @@ var fileCmd = &cobra.Command{
 				return fmt.Errorf("error parsing log file: %v", err)
 			}
 
-			return processLogs(logs)
+			return processLogs(logs, "")
 		} else {
 			// Multiple files mode
 			var allLogs []LogEntry
@@ -128,7 +129,7 @@ var fileCmd = &cobra.Command{
 			})
 
 			logger.Info("Finished processing files", "total_files", len(args), "total_entries", len(allLogs))
-			return processLogs(allLogs)
+			return processLogs(allLogs, "")
 		}
 	},
 }
@@ -154,7 +155,7 @@ var notificationCmd = &cobra.Command{
 			return fmt.Errorf("error parsing notification log file: %v", err)
 		}
 
-		return processLogs(logs)
+		return processLogs(logs, "")
 	},
 }
 
@@ -174,16 +175,16 @@ var supportPacketCmd = &cobra.Command{
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
 		}
 
-		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		result, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
 
 		if verbose {
-			fmt.Printf("Debug: processing %d log entries\n", len(logs))
+			fmt.Printf("Debug: processing %d log entries\n", len(result.Logs))
 		}
 
-		return processLogs(logs)
+		return processLogs(result.Logs, result.ConfigContent)
 	},
 }
 
@@ -297,6 +298,7 @@ func init() {
 		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
+		cmd.Flags().BoolVar(&includeConfig, "include-config", false, "Include configuration in AI analysis (support-packet only)")
 		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis with all sections")
 		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw log entries instead of analysis (old default behavior)")
 
@@ -342,7 +344,7 @@ func init() {
 		})
 
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "verbose-analysis", "raw"} {
+		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "include-config", "verbose-analysis", "raw"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
@@ -375,7 +377,7 @@ func contains(slice []string, str string) bool {
 }
 
 // processLogs handles the common log processing logic
-func processLogs(logs []LogEntry) error {
+func processLogs(logs []LogEntry, configContent string) error {
 	// Note: Filtering is already applied during log parsing in parseLogFile
 	// so by the time logs reach this function, they're already filtered
 	
@@ -501,7 +503,7 @@ func processLogs(logs []LogEntry) error {
 			ThinkingBudget: thinkingBudget,
 		}
 		
-		if err := analyzeWithLLM(logs, config); err != nil {
+		if err := analyzeWithLLM(logs, config, configContent); err != nil {
 			return fmt.Errorf("error during LLM analysis: %v", err)
 		}
 	case analyze:
