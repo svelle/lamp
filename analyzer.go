@@ -398,16 +398,16 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 			}
 			_, _ = fmt.Fprintln(writer, "")
 		} else {
-			// Compact errors - show top 2 with truncated messages
+			// Compact errors - show top 3 with truncated messages (consistent with verbose)
 			_, _ = fmt.Fprintf(writer, "%sTop Errors:%s ", subHeaderColor, resetColor)
 			for i, err := range analysis.TopErrorMessages {
-				if i >= 2 {
+				if i >= 3 {
 					break
 				}
 				if i > 0 {
 					_, _ = fmt.Fprintf(writer, " • ")
 				}
-				// Truncate error message further for compact view
+				// Truncate error message - use same length as verbose view
 				msg := err.Item
 				if len(msg) > 30 {
 					msg = msg[:30] + "..."
