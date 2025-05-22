@@ -8,6 +8,12 @@ import (
 	"time"
 )
 
+// ANSI color constants
+const (
+	colorHeaderBold = "\033[1;36m" // Bold Cyan
+	colorSubHeader  = "\033[1;33m" // Bold Yellow
+)
+
 // LogAnalysis contains statistics and insights from log entries
 type LogAnalysis struct {
 	TotalEntries        int
@@ -41,7 +47,7 @@ type CountedItem struct {
 }
 
 // analyzeAndDisplayStats analyzes log entries and displays statistics
-func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
+func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool, verboseAnalysis bool) {
 	if len(logs) == 0 {
 		_, _ = fmt.Fprintln(writer, "No log entries to analyze.")
 		return
@@ -68,7 +74,7 @@ func analyzeAndDisplayStats(logs []LogEntry, writer io.Writer, showDupes bool) {
 	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries && showDupes
 
 	analysis := analyzeLogs(logs, showDupes)
-	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries)
+	displayAnalysis(analysis, writer, isDeduplicated, uniqueEntries, verboseAnalysis)
 }
 
 // analyzeLogs performs analysis on log entries
@@ -285,158 +291,150 @@ func getDominantLevelColor(levelCounts map[string]int, totalCount int) string {
 	return "\033[0m" // Default to reset color
 }
 
-// displayAnalysis prints the analysis results
-func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool, uniqueEntries int) {
-	// ANSI color codes
-	headerColor := "\033[1;36m"    // Bold Cyan
-	subHeaderColor := "\033[1;33m" // Bold Yellow
-	resetColor := "\033[0m"
-
-	_, _ = fmt.Fprintf(writer, "\n%s=== MATTERMOST LOG ANALYSIS ===%s\n\n", headerColor, resetColor)
-
-	// Basic statistics
-	_, _ = fmt.Fprintf(writer, "%sBasic Statistics:%s\n", subHeaderColor, resetColor)
+// formatHeaderStats formats the header statistics line
+func formatHeaderStats(totalEntries int, isDeduplicated bool, uniqueEntries int, duration time.Duration, errorRate float64) string {
 	if isDeduplicated {
-		_, _ = fmt.Fprintf(writer, "Unique Log Entries: %d\n", uniqueEntries)
-		_, _ = fmt.Fprintf(writer, "Total Log Entries: %d (including %d duplicates)\n",
-			analysis.TotalEntries, analysis.TotalEntries-uniqueEntries)
-		_, _ = fmt.Fprintf(writer, "Deduplication Ratio: %.2f:1\n", float64(analysis.TotalEntries)/float64(uniqueEntries))
+		return fmt.Sprintf("%d entries (%d unique) • %s • Error rate: %.1f%%", 
+			totalEntries, uniqueEntries, duration, errorRate)
 	} else {
-		_, _ = fmt.Fprintf(writer, "Total Log Entries: %d\n", analysis.TotalEntries)
+		return fmt.Sprintf("%d entries • %s • Error rate: %.1f%%", 
+			totalEntries, duration, errorRate)
 	}
-	_, _ = fmt.Fprintf(writer, "Time Range: %s to %s\n",
-		analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
-		analysis.TimeRange.End.Format("2006-01-02 15:04:05"))
-	_, _ = fmt.Fprintf(writer, "Duration: %s\n\n", analysis.TimeRange.End.Sub(analysis.TimeRange.Start).Round(time.Second))
+}
 
-	// Log level distribution
-	_, _ = fmt.Fprintf(writer, "%sLog Level Distribution:%s\n", subHeaderColor, resetColor)
-	for level, count := range analysis.LevelCounts {
-		percentage := float64(count) / float64(analysis.TotalEntries) * 100
+// formatLevelDistribution formats the log level distribution line
+func formatLevelDistribution(levelCounts map[string]int, totalEntries int, showPercentages bool) string {
+	var parts []string
+	for level, count := range levelCounts {
 		levelColor := getLevelColor(level)
-		_, _ = fmt.Fprintf(writer, "%s%s%s: %d (%.1f%%)\n", levelColor, level, resetColor, count, percentage)
-	}
-	_, _ = fmt.Fprintf(writer, "Error Rate: %.2f%%\n\n", analysis.ErrorRate)
-
-	// Top sources
-	_, _ = fmt.Fprintf(writer, "%sTop Log Sources:%s\n", subHeaderColor, resetColor)
-	for i, source := range analysis.TopSources {
-		if i < 5 {
-			_, _ = fmt.Fprintf(writer, "%d. %s (%d entries)\n", i+1, source.Item, source.Count)
+		if showPercentages {
+			percentage := float64(count) / float64(totalEntries) * 100
+			parts = append(parts, fmt.Sprintf("%s%s%s:%d(%.0f%%)", levelColor, level, colorReset, count, percentage))
+		} else {
+			parts = append(parts, fmt.Sprintf("%s%s%s:%d", levelColor, level, colorReset, count))
 		}
 	}
-	_, _ = fmt.Fprintln(writer)
+	return strings.Join(parts, " • ")
+}
 
-	// Top users (if any)
-	if len(analysis.TopUsers) > 0 {
-		_, _ = fmt.Fprintf(writer, "%sTop Active Users:%s\n", subHeaderColor, resetColor)
-		for i, user := range analysis.TopUsers {
-			if i < 5 {
-				_, _ = fmt.Fprintf(writer, "%d. %s (%d entries)\n", i+1, user.Item, user.Count)
-			}
+// formatTopItemsLine formats a line of top N items with counts
+func formatTopItemsLine(items []CountedItem, maxItems int, truncateLength int) string {
+	var parts []string
+	for i, item := range items {
+		if i >= maxItems {
+			break
 		}
-		_, _ = fmt.Fprintln(writer)
-	}
-
-	// Top error messages (if any)
-	if len(analysis.TopErrorMessages) > 0 {
-		_, _ = fmt.Fprintf(writer, "%sTop Error Messages:%s\n", subHeaderColor, resetColor)
-		for i, err := range analysis.TopErrorMessages {
-			if i < 5 {
-				_, _ = fmt.Fprintf(writer, "%d. %s (%d occurrences)\n", i+1, err.Item, err.Count)
-			}
+		text := item.Item
+		if truncateLength > 0 && len(text) > truncateLength {
+			text = text[:truncateLength] + "..."
 		}
-		_, _ = fmt.Fprintln(writer)
+		parts = append(parts, fmt.Sprintf("%s(%d)", text, item.Count))
 	}
+	return strings.Join(parts, " • ")
+}
 
-	// Busiest hours
-	_, _ = fmt.Fprintf(writer, "%sActivity by Hour:%s\n", subHeaderColor, resetColor)
-	// Find the max count for scaling
+// findMaxCountAndCreateMap finds the maximum count and creates a map for easier lookup
+func findMaxCountAndCreateMap(items []CountedItem) (int, map[string]int) {
 	maxCount := 0
-	for _, hour := range analysis.BusiestHours {
-		if hour.Count > maxCount {
-			maxCount = hour.Count
+	itemMap := make(map[string]int)
+	for _, item := range items {
+		if item.Count > maxCount {
+			maxCount = item.Count
 		}
+		itemMap[item.Item] = item.Count
 	}
+	return maxCount, itemMap
+}
 
-	// Create a map for easier hour lookup
+// createHourMap creates an hour map (int -> int) from BusiestHours and finds max count
+func createHourMap(items []CountedItem) (int, map[int]int) {
+	maxCount := 0
 	hourMap := make(map[int]int)
-	for _, hour := range analysis.BusiestHours {
+	for _, item := range items {
+		if item.Count > maxCount {
+			maxCount = item.Count
+		}
 		hourNum := 0
-		if _, err := fmt.Sscanf(hour.Item, "%d", &hourNum); err != nil {
-			logger.Debug("Invalid hour format in activity analysis", "hour", hour.Item, "error", err)
-			// Skip invalid hour entries
+		if _, err := fmt.Sscanf(item.Item, "%d", &hourNum); err != nil {
+			logger.Debug("Invalid hour format in activity analysis", "hour", item.Item, "error", err)
 			continue
 		}
 		if hourNum < 0 || hourNum >= 24 {
 			logger.Debug("Hour outside valid range", "hour", hourNum)
-			// Skip hours outside valid range
 			continue
 		}
-		hourMap[hourNum] = hour.Count
+		hourMap[hourNum] = item.Count
+	}
+	return maxCount, hourMap
+}
+
+// displayAnalysis prints the analysis results
+func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool, uniqueEntries int, verboseAnalysis bool) {
+
+	// Calculate duration once
+	duration := analysis.TimeRange.End.Sub(analysis.TimeRange.Start).Round(time.Second)
+
+	headerStats := formatHeaderStats(analysis.TotalEntries, isDeduplicated, uniqueEntries, duration, analysis.ErrorRate)
+	
+	if verboseAnalysis {
+		_, _ = fmt.Fprintf(writer, "\n%s=== MATTERMOST LOG ANALYSIS ===%s\n", colorHeaderBold, colorReset)
+		_, _ = fmt.Fprintf(writer, "%s\n", headerStats)
+		_, _ = fmt.Fprintf(writer, "%s to %s\n",
+			analysis.TimeRange.Start.Format("2006-01-02 15:04:05"),
+			analysis.TimeRange.End.Format("2006-01-02 15:04:05"))
+	} else {
+		_, _ = fmt.Fprintf(writer, "\n%sLOG ANALYSIS%s\n", colorHeaderBold, colorReset)
+		_, _ = fmt.Fprintf(writer, "%s\n\n", headerStats)
 	}
 
-	// Display hours with bar chart
-	for hour := 0; hour < 24; hour++ {
-		count := hourMap[hour]
-		barLength := int(float64(count) / float64(maxCount) * 30)
-		bar := strings.Repeat("█", barLength)
-		
-		// Get dominant log level color for this hour
-		levelColor := getDominantLevelColor(analysis.HourLevelCounts[hour], count)
-		
-		_, _ = fmt.Fprintf(writer, "%02d:00: %s%s%s (%d)\n", hour, levelColor, bar, resetColor, count)
+	// Log level distribution
+	levelDistribution := formatLevelDistribution(analysis.LevelCounts, analysis.TotalEntries, verboseAnalysis)
+	_, _ = fmt.Fprintf(writer, "%sLevels:%s %s\n", colorSubHeader, colorReset, levelDistribution)
+
+	// Top sources
+	if len(analysis.TopSources) > 0 {
+		sourcesLine := formatTopItemsLine(analysis.TopSources, 3, 0)
+		_, _ = fmt.Fprintf(writer, "%sSources:%s %s\n", colorSubHeader, colorReset, sourcesLine)
 	}
-	_, _ = fmt.Fprintln(writer)
+
+
+	// Top error messages (if any)
+	if len(analysis.TopErrorMessages) > 0 {
+		truncateLength := 40
+		if !verboseAnalysis {
+			truncateLength = 30
+		}
+		errorsLine := formatTopItemsLine(analysis.TopErrorMessages, 3, truncateLength)
+		_, _ = fmt.Fprintf(writer, "%sTop Errors:%s %s\n", colorSubHeader, colorReset, errorsLine)
+	}
+
+	// Peak hours - only in compact mode
+	if !verboseAnalysis {
+		// Sort hours by activity and show top 3
+		sortedHours := make([]CountedItem, 0, len(analysis.BusiestHours))
+		for _, hour := range analysis.BusiestHours {
+			if hour.Count > 0 {
+				sortedHours = append(sortedHours, hour)
+			}
+		}
+		
+		// Sort by count (descending)
+		sort.Slice(sortedHours, func(i, j int) bool {
+			return sortedHours[i].Count > sortedHours[j].Count
+		})
+		
+		peakHoursLine := formatTopItemsLine(sortedHours, 3, 0)
+		// Add 'h' suffix to hours
+		peakHoursLine = strings.ReplaceAll(peakHoursLine, "(", "h(")
+		_, _ = fmt.Fprintf(writer, "%sPeak Hours:%s %s\n", colorSubHeader, colorReset, peakHoursLine)
+	}
 	
-	// Activity by day of week (if time range spans multiple days)
+	
+	// Activity by month (if time range spans multiple months) - verbose only
 	timeSpan := analysis.TimeRange.End.Sub(analysis.TimeRange.Start)
-	if timeSpan.Hours() >= 24 && len(analysis.ActivityByDayOfWeek) > 0 {
-		_, _ = fmt.Fprintf(writer, "%sActivity by Day of Week:%s\n", subHeaderColor, resetColor)
-		// Find the max count for scaling
-		maxCount = 0
-		for _, day := range analysis.ActivityByDayOfWeek {
-			if day.Count > maxCount {
-				maxCount = day.Count
-			}
-		}
-		
-		// Create a map for easier day lookup
-		dayMap := make(map[string]int)
-		for _, day := range analysis.ActivityByDayOfWeek {
-			dayMap[day.Item] = day.Count
-		}
-		
-		// Display days with bar chart (in order from Sunday to Saturday)
-		for _, day := range []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"} {
-			count := dayMap[day]
-			barLength := int(float64(count) / float64(maxCount) * 30)
-			bar := strings.Repeat("█", barLength)
-			
-			// Get dominant log level color for this day
-			levelColor := getDominantLevelColor(analysis.DayLevelCounts[day], count)
-			
-			_, _ = fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", day, levelColor, bar, resetColor, count)
-		}
-		_, _ = fmt.Fprintln(writer)
-	}
-	
-	// Activity by month (if time range spans multiple months)
-	if timeSpan.Hours() >= 24*30 && len(analysis.ActivityByMonth) > 0 {
-		_, _ = fmt.Fprintf(writer, "%sActivity by Month:%s\n", subHeaderColor, resetColor)
-		// Find the max count for scaling
-		maxCount = 0
-		for _, month := range analysis.ActivityByMonth {
-			if month.Count > maxCount {
-				maxCount = month.Count
-			}
-		}
-		
-		// Create a map for easier month lookup
-		monthMap := make(map[string]int)
-		for _, month := range analysis.ActivityByMonth {
-			monthMap[month.Item] = month.Count
-		}
+	if verboseAnalysis && timeSpan.Hours() >= 24*30 && len(analysis.ActivityByMonth) > 0 {
+		_, _ = fmt.Fprintf(writer, "%sActivity by Month:%s\n", colorSubHeader, colorReset)
+		maxCount, monthMap := findMaxCountAndCreateMap(analysis.ActivityByMonth)
 		
 		// Display months with bar chart (in calendar order)
 		for _, month := range []string{"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"} {
@@ -447,23 +445,15 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 			// Get dominant log level color for this month
 			levelColor := getDominantLevelColor(analysis.MonthLevelCounts[month], count)
 			
-			_, _ = fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", month, levelColor, bar, resetColor, count)
+			_, _ = fmt.Fprintf(writer, "%-9s: %s%s%s (%d)\n", month, levelColor, bar, colorReset, count)
 		}
 		_, _ = fmt.Fprintln(writer)
 	}
 
-	// Common message patterns
-	_, _ = fmt.Fprintf(writer, "%sCommon Message Patterns:%s\n", subHeaderColor, resetColor)
-	for i, pattern := range analysis.CommonPatterns {
-		if i < 5 {
-			_, _ = fmt.Fprintf(writer, "%d. \"%s\" (%d occurrences)\n", i+1, pattern.Item, pattern.Count)
-		}
-	}
-	_, _ = fmt.Fprintln(writer)
 	
-	// Notification statistics (if present)
-	if len(analysis.NotificationTypes) > 0 {
-		_, _ = fmt.Fprintf(writer, "%sNotification Statistics:%s\n", subHeaderColor, resetColor)
+	// Notification statistics (if present) - only in verbose mode
+	if verboseAnalysis && len(analysis.NotificationTypes) > 0 {
+		_, _ = fmt.Fprintf(writer, "%sNotification Statistics:%s\n", colorSubHeader, colorReset)
 		
 		// Notification types
 		if len(analysis.NotificationTypes) > 0 {
@@ -483,7 +473,60 @@ func displayAnalysis(analysis LogAnalysis, writer io.Writer, isDeduplicated bool
 		_, _ = fmt.Fprintln(writer)
 	}
 
-	_, _ = fmt.Fprintf(writer, "\n%s=== END OF ANALYSIS ===%s\n\n", headerColor, resetColor)
+	// Activity sections at the bottom - verbose only
+	if verboseAnalysis {
+		// Activity by hour
+		_, _ = fmt.Fprintf(writer, "%sActivity by Hour:%s\n", colorSubHeader, colorReset)
+		maxCount, hourMap := createHourMap(analysis.BusiestHours)
+
+		// Display hours with bar chart (skip zero activity hours)
+		for hour := 0; hour < 24; hour++ {
+			count := hourMap[hour]
+			if count == 0 {
+				continue // Skip hours with no activity
+			}
+			barLength := int(float64(count) / float64(maxCount) * 15) // Shorter bars
+			bar := strings.Repeat("█", barLength)
+			
+			// Get dominant log level color for this hour
+			levelColor := getDominantLevelColor(analysis.HourLevelCounts[hour], count)
+			
+			_, _ = fmt.Fprintf(writer, "%02d:00: %s%s%s (%d)\n", hour, levelColor, bar, colorReset, count)
+		}
+		_, _ = fmt.Fprintln(writer)
+
+		// Activity by day of week (if time range spans multiple days)
+		timeSpan := analysis.TimeRange.End.Sub(analysis.TimeRange.Start)
+		if timeSpan.Hours() >= 24 && len(analysis.ActivityByDayOfWeek) > 0 {
+			_, _ = fmt.Fprintf(writer, "%sActivity by Day of Week:%s\n", colorSubHeader, colorReset)
+			maxCount, dayMap := findMaxCountAndCreateMap(analysis.ActivityByDayOfWeek)
+			
+			// Display days with bar chart (in order from Sunday to Saturday, skip zero days)
+			dayNames := []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"}
+			dayAbbrevs := []string{"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"}
+			for i, day := range dayNames {
+				count := dayMap[day]
+				if count == 0 {
+					continue // Skip days with no activity
+				}
+				barLength := int(float64(count) / float64(maxCount) * 15) // Shorter bars
+				bar := strings.Repeat("█", barLength)
+				
+				// Get dominant log level color for this day
+				levelColor := getDominantLevelColor(analysis.DayLevelCounts[day], count)
+				
+				_, _ = fmt.Fprintf(writer, "%s: %s%s%s (%d)\n", dayAbbrevs[i], levelColor, bar, colorReset, count)
+			}
+			_, _ = fmt.Fprintln(writer)
+		}
+	}
+
+	// Footer
+	if verboseAnalysis {
+		_, _ = fmt.Fprintf(writer, "\n%s=== END OF ANALYSIS ===%s\n\n", colorHeaderBold, colorReset)
+	} else {
+		_, _ = fmt.Fprintln(writer, "")
+	}
 }
 
 // getLevelColor returns the ANSI color code for a log level
