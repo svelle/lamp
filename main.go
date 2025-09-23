@@ -181,7 +181,7 @@ var supportPacketCmd = &cobra.Command{
 		}
 
 		if verbose {
-			fmt.Printf("Debug: processing %d log entries\n", len(result.Logs))
+			logger.Debug("Debug: processing log entries", "count", len(result.Logs))
 		}
 
 		return processLogs(result.Logs, result.ConfigContent)
