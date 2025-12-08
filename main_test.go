@@ -55,15 +55,15 @@ func TestMultiFileCommand(t *testing.T) {
 	for _, lf := range logFiles {
 		path := filepath.Join(tempDir, lf.name)
 		filePaths = append(filePaths, path)
-		
+
 		f, err := os.Create(path)
 		require.NoError(t, err)
-		
+
 		for _, line := range lf.contents {
 			_, err = f.WriteString(line + "\n")
 			require.NoError(t, err)
 		}
-		
+
 		_ = f.Close()
 	}
 
@@ -80,24 +80,24 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
-		
+
 		// Enable raw output to test log content
 		rawOutput = true
-		
+
 		// Call the RunE function from fileCmd
 		err := fileCmd.RunE(cmd, filePaths)
 		require.NoError(t, err)
-		
+
 		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
 		rawOutput = false // Reset for other tests
-		
+
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
 		require.NoError(t, err)
 		output := buf.String()
-		
+
 		// Check output contains expected content
 		assert.Contains(t, output, "System started")
 		assert.Contains(t, output, "User login")
@@ -119,31 +119,31 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
-		
+
 		// Set the level filter to info and enable raw output
 		levelFilter = "info"
 		rawOutput = true
-		
+
 		// Call the RunE function from fileCmd
 		err := fileCmd.RunE(cmd, filePaths)
 		require.NoError(t, err)
-		
+
 		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
-		levelFilter = "" // Reset for other tests
+		levelFilter = ""  // Reset for other tests
 		rawOutput = false // Reset for other tests
-		
+
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
 		require.NoError(t, err)
 		output := buf.String()
-		
+
 		// Check output contains only info logs
 		assert.Contains(t, output, "System started")
 		assert.Contains(t, output, "User login")
 		assert.Contains(t, output, "Config loaded")
-		
+
 		// These should not be in the output
 		assert.NotContains(t, output, "Connection failed") // error level
 		assert.NotContains(t, output, "High memory usage") // warn level
@@ -154,17 +154,17 @@ func TestMultiFileCommand(t *testing.T) {
 		// For this test, let's test one file at a time since the multiple files implementation
 		// handles missing files differently (it skips them)
 		nonExistentPath := filepath.Join(tempDir, "nonexistent.log")
-		
+
 		// Set up command
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
-		
+
 		// Call the RunE function with single non-existent file
 		// In single file mode, it should return an error
 		err := fileCmd.RunE(cmd, []string{nonExistentPath})
-		
+
 		// Error should be returned due to missing file
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "does not exist")
@@ -173,10 +173,10 @@ func TestMultiFileCommand(t *testing.T) {
 	t.Run("file command with mixed valid and invalid files", func(t *testing.T) {
 		// Create a list with one valid file and one non-existent file
 		mixedPaths := []string{
-			filePaths[0],                               // Valid file
-			filepath.Join(tempDir, "nonexistent.log"),  // Non-existent file
+			filePaths[0], // Valid file
+			filepath.Join(tempDir, "nonexistent.log"), // Non-existent file
 		}
-		
+
 		// Set up command
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
@@ -185,31 +185,31 @@ func TestMultiFileCommand(t *testing.T) {
 
 		// Create a buffer to capture logs
 		var logOutput bytes.Buffer
-		
+
 		// Hold the original logger
 		origLogger := logger
-		
+
 		// Create a new text handler that writes to our buffer
 		handler := slog.NewTextHandler(&logOutput, &slog.HandlerOptions{
 			Level: slog.LevelDebug,
 		})
-		
+
 		// Set up a new logger that writes to our buffer
 		logger = slog.New(handler)
-		
+
 		// Call the RunE function from fileCmd with mixed files
 		// In multiple file mode, it should not return an error for missing files
 		err := fileCmd.RunE(cmd, mixedPaths)
-		
+
 		// Restore original logger
 		logger = origLogger
-		
+
 		// Convert the log output to a string
 		logString := logOutput.String()
-		
+
 		// No error should be returned
 		assert.NoError(t, err)
-		
+
 		// But a warning should be logged about the missing file
 		assert.Contains(t, logString, "does not exist")
 		assert.Contains(t, logString, "skipping")
@@ -220,62 +220,62 @@ func TestMultiFileCommand(t *testing.T) {
 		dupFile := filepath.Join(tempDir, "duplicates.log")
 		f, err := os.Create(dupFile)
 		require.NoError(t, err)
-		
+
 		// Write same log message multiple times with slight variations
 		for i := 0; i < 3; i++ {
 			_, err = f.WriteString(`info [2025-01-01 11:00:00.000 Z] System check complete caller="system/checks.go:42" status="ok"` + "\n")
 			require.NoError(t, err)
 		}
 		_ = f.Close()
-		
+
 		// Store original stdout
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
-		
+
 		// Set up command with trim flag
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
 		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
-		
+
 		// Enable trimming and raw output
 		trim = true
 		rawOutput = true
-		
+
 		// Call the RunE function from fileCmd with just the duplicates file
 		err = fileCmd.RunE(cmd, []string{dupFile})
 		require.NoError(t, err)
-		
+
 		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
-		trim = false // Reset for other tests
+		trim = false      // Reset for other tests
 		rawOutput = false // Reset for other tests
-		
+
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
 		require.NoError(t, err)
 		output := buf.String()
-		
-		// Output should indicate deduplication 
+
+		// Output should indicate deduplication
 		assert.Contains(t, output, "System check complete")
-		
+
 		// Check for indication of repeated entries - could be either "repeated" or "duplicate_count"
 		// depending on display format
-		assert.True(t, strings.Contains(output, "repeated") || 
-		            strings.Contains(output, "duplicate_count") ||
-		            strings.Contains(output, "3"), 
-		            "Output should indicate duplicated entries")
+		assert.True(t, strings.Contains(output, "repeated") ||
+			strings.Contains(output, "duplicate_count") ||
+			strings.Contains(output, "3"),
+			"Output should indicate duplicated entries")
 	})
-	
+
 	t.Run("analyze command", func(t *testing.T) {
 		// Create a file with logs spanning multiple days
 		analyzeFile := filepath.Join(tempDir, "analyze.log")
 		f, err := os.Create(analyzeFile)
 		require.NoError(t, err)
-		
+
 		// Write logs with different timestamps, days, and levels
 		logs := []string{
 			`info [2025-01-01 10:00:00.000 Z] System started caller="system/init.go:42"`,
@@ -286,18 +286,18 @@ func TestMultiFileCommand(t *testing.T) {
 			`debug [2025-01-03 10:45:00.000 Z] Cache invalidated caller="cache/manager.go:55"`,
 			`error [2025-01-03 15:30:00.000 Z] Failed to send email caller="email/sender.go:87"`,
 		}
-		
+
 		for _, line := range logs {
 			_, err = f.WriteString(line + "\n")
 			require.NoError(t, err)
 		}
 		_ = f.Close()
-		
+
 		// Store original stdout
 		oldStdout := os.Stdout
 		r, w, _ := os.Pipe()
 		os.Stdout = w
-		
+
 		// Set up command with analyze flag
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
@@ -305,41 +305,41 @@ func TestMultiFileCommand(t *testing.T) {
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze log patterns")
 		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis")
-		
+
 		// Enable analysis with verbose output
 		analyze = true
 		verboseAnalysis = true
-		
+
 		// Call the RunE function from fileCmd
 		err = fileCmd.RunE(cmd, []string{analyzeFile})
 		require.NoError(t, err)
-		
+
 		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
-		analyze = false // Reset for other tests
+		analyze = false         // Reset for other tests
 		verboseAnalysis = false // Reset for other tests
-		
+
 		var buf bytes.Buffer
 		_, err = buf.ReadFrom(r)
 		require.NoError(t, err)
 		output := buf.String()
-		
+
 		// Test for presence of analysis sections
 		assert.Contains(t, output, "=== MATTERMOST LOG ANALYSIS ===")
 		assert.Contains(t, output, "Levels:")
 		assert.Contains(t, output, "Activity by Hour:")
 		assert.Contains(t, output, "Activity by Day of Week:")
-		
+
 		// Check for specific data
 		assert.Contains(t, output, "7 entries")
 		assert.Contains(t, output, "ERROR")
 		assert.Contains(t, output, "INFO")
-		
+
 		// Check for time range information
 		assert.Contains(t, output, "2025-01-01")
 		assert.Contains(t, output, "2025-01-03")
-		
+
 		// Check for day of week information (abbreviated format)
 		assert.Contains(t, output, "Wed")
 		assert.Contains(t, output, "Thu")

@@ -49,16 +49,16 @@ type LLMConfig struct {
 
 // AnalysisPrompt contains the prepared prompt data for LLM analysis
 type AnalysisPrompt struct {
-	SystemPrompt string
-	UserPrompt   string
-	LogText      string
-	Description  string
+	SystemPrompt  string
+	UserPrompt    string
+	LogText       string
+	Description   string
 	HasDuplicates bool
 }
 
 // analyzeWithLLM routes the log analysis to the appropriate LLM provider
 func analyzeWithLLM(logs []LogEntry, config LLMConfig) error {
-	// If the API key is not provided and we're not using Ollama (which doesn't need a key), 
+	// If the API key is not provided and we're not using Ollama (which doesn't need a key),
 	// try to get it from the environment
 	if config.APIKey == "" && config.Provider != ProviderOllama {
 		envVar := getAPIKeyEnvVar(config.Provider)
@@ -156,7 +156,7 @@ func formatLogsForAnalysis(logs []LogEntry) (string, int, bool) {
 // prepareAnalysisPrompts generates system and user prompts for log analysis
 func prepareAnalysisPrompts(logs []LogEntry, config LLMConfig) (AnalysisPrompt, error) {
 	var prompt AnalysisPrompt
-	
+
 	// If maxEntries is not set (0), use the default
 	maxEntries := config.MaxEntries
 	if maxEntries <= 0 {
@@ -243,20 +243,20 @@ func displayAndCopyAnalysis(analysisText string) error {
 
 	// Display the analysis
 	fmt.Println("\n" + analysisBuffer.String())
-	
+
 	// Prompt the user to copy to clipboard
 	fmt.Println("\n-------------------------------------------------")
 	fmt.Println("The analysis above is formatted in Markdown.")
 	fmt.Print("Would you like to copy it to your clipboard? (y/n): ")
-	
+
 	// Read user input
 	var response string
 	_, err := fmt.Scanln(&response)
 	if err != nil {
 		fmt.Println("Error reading input:", err)
 		return nil // Non-fatal error
-	} 
-	
+	}
+
 	if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
 		err = clipboard.WriteAll(analysisBuffer.String())
 		if err != nil {
@@ -324,14 +324,14 @@ func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
 	if modelName == "" {
 		modelName = getDefaultModel(config.Provider)
 	}
-	
+
 	// Try to get the human-friendly model name
 	modelInfo, found := GetModelInfo(config.Provider, modelName)
 	if found {
-		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n",
 			config.Provider, modelInfo.Name, modelName)
 	} else {
-		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s...\n",
 			config.Provider, modelName)
 	}
 
@@ -440,7 +440,7 @@ func analyzeWithAnthropic(logs []LogEntry, config LLMConfig) error {
 
 	// Extract analysis text from response
 	var analysisText string
-	
+
 	// Check if we're using extended thinking mode
 	if config.ThinkingBudget > 0 {
 		// Look for thinking content and final answer
@@ -508,13 +508,13 @@ type OpenAIMessage struct {
 
 // OpenAIResponse represents the response structure from OpenAI API
 type OpenAIResponse struct {
-	ID      string            `json:"id"`
-	Object  string            `json:"object"`
-	Created int64             `json:"created"`
-	Model   string            `json:"model"`
-	Choices []OpenAIChoice    `json:"choices"`
-	Usage   OpenAIUsage       `json:"usage"`
-	Error   *OpenAIError      `json:"error,omitempty"`
+	ID      string         `json:"id"`
+	Object  string         `json:"object"`
+	Created int64          `json:"created"`
+	Model   string         `json:"model"`
+	Choices []OpenAIChoice `json:"choices"`
+	Usage   OpenAIUsage    `json:"usage"`
+	Error   *OpenAIError   `json:"error,omitempty"`
 }
 
 // OpenAIChoice represents a completion choice in the OpenAI API response
@@ -544,15 +544,15 @@ type OpenAIError struct {
 
 // GeminiRequest represents the request structure for Gemini API
 type GeminiRequest struct {
-	Contents         []GeminiContent `json:"contents"`
+	Contents         []GeminiContent        `json:"contents"`
 	GenerationConfig GeminiGenerationConfig `json:"generationConfig"`
-	SafetySettings   []GeminiSafetySetting `json:"safetySettings,omitempty"`
+	SafetySettings   []GeminiSafetySetting  `json:"safetySettings,omitempty"`
 }
 
 // GeminiContent represents a content part in the Gemini API request
 type GeminiContent struct {
-	Role  string         `json:"role"`
-	Parts []GeminiPart   `json:"parts"`
+	Role  string       `json:"role"`
+	Parts []GeminiPart `json:"parts"`
 }
 
 // GeminiPart represents a content part in a Gemini content message
@@ -576,15 +576,15 @@ type GeminiSafetySetting struct {
 
 // GeminiResponse represents the response structure from Gemini API
 type GeminiResponse struct {
-	Candidates []GeminiCandidate `json:"candidates"`
+	Candidates     []GeminiCandidate     `json:"candidates"`
 	PromptFeedback *GeminiPromptFeedback `json:"promptFeedback,omitempty"`
-	Error *GeminiError `json:"error,omitempty"`
+	Error          *GeminiError          `json:"error,omitempty"`
 }
 
 // GeminiCandidate represents a completion candidate in the Gemini API response
 type GeminiCandidate struct {
-	Content       GeminiContent       `json:"content"`
-	FinishReason  string              `json:"finishReason"`
+	Content       GeminiContent        `json:"content"`
+	FinishReason  string               `json:"finishReason"`
 	SafetyRatings []GeminiSafetyRating `json:"safetyRatings,omitempty"`
 }
 
@@ -612,10 +612,10 @@ type GeminiError struct {
 
 // OllamaRequest represents the request structure for Ollama API
 type OllamaRequest struct {
-	Model     string              `json:"model"`
-	Messages  []OllamaMessage     `json:"messages"`
-	Stream    bool                `json:"stream"`
-	Options   OllamaOptions       `json:"options,omitempty"`
+	Model    string          `json:"model"`
+	Messages []OllamaMessage `json:"messages"`
+	Stream   bool            `json:"stream"`
+	Options  OllamaOptions   `json:"options,omitempty"`
 }
 
 // OllamaMessage represents a message in the Ollama API request
@@ -633,16 +633,16 @@ type OllamaOptions struct {
 
 // OllamaResponse represents the response structure from Ollama API
 type OllamaResponse struct {
-	Model       string `json:"model"`
-	CreatedAt   string `json:"created_at"`
-	Message     OllamaMessage `json:"message"`
-	Done        bool   `json:"done"`
-	TotalDuration int64 `json:"total_duration"`
-	LoadDuration  int64 `json:"load_duration"`
-	PromptEvalCount int  `json:"prompt_eval_count"`
-	PromptEvalDuration int64 `json:"prompt_eval_duration"`
-	EvalCount      int  `json:"eval_count"`
-	EvalDuration   int64 `json:"eval_duration"`
+	Model              string        `json:"model"`
+	CreatedAt          string        `json:"created_at"`
+	Message            OllamaMessage `json:"message"`
+	Done               bool          `json:"done"`
+	TotalDuration      int64         `json:"total_duration"`
+	LoadDuration       int64         `json:"load_duration"`
+	PromptEvalCount    int           `json:"prompt_eval_count"`
+	PromptEvalDuration int64         `json:"prompt_eval_duration"`
+	EvalCount          int           `json:"eval_count"`
+	EvalDuration       int64         `json:"eval_duration"`
 }
 
 // analyzeWithGemini sends log data to Gemini API for analysis
@@ -652,14 +652,14 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	if modelName == "" {
 		modelName = getDefaultModel(config.Provider)
 	}
-	
+
 	// Try to get the human-friendly model name
 	modelInfo, found := GetModelInfo(config.Provider, modelName)
 	if found {
-		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n",
 			config.Provider, modelInfo.Name, modelName)
 	} else {
-		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s...\n",
 			config.Provider, modelName)
 	}
 
@@ -678,7 +678,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	// Gemini doesn't support "system" role, so combine system and user prompts
 	// into a single user message
 	combinedPrompt := prompt.SystemPrompt + "\n\n" + prompt.UserPrompt
-	
+
 	userContent := GeminiContent{
 		Role: "user",
 		Parts: []GeminiPart{
@@ -703,7 +703,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Create HTTP request
-	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s", 
+	apiURL := fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s",
 		modelToUse, config.APIKey)
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestJSON))
 	if err != nil {
@@ -746,7 +746,7 @@ func analyzeWithGemini(logs []LogEntry, config LLMConfig) error {
 
 	// Check for API error
 	if geminiResponse.Error != nil {
-		return fmt.Errorf("gemini API error (code %d): %s", 
+		return fmt.Errorf("gemini API error (code %d): %s",
 			geminiResponse.Error.Code, geminiResponse.Error.Message)
 	}
 
@@ -772,14 +772,14 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 	if modelName == "" {
 		modelName = getDefaultModel(config.Provider)
 	}
-	
+
 	// Try to get the human-friendly model name
 	modelInfo, found := GetModelInfo(config.Provider, modelName)
 	if found {
-		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n",
 			config.Provider, modelInfo.Name, modelName)
 	} else {
-		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s...\n",
 			config.Provider, modelName)
 	}
 
@@ -794,7 +794,7 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 		Role:    "system",
 		Content: prompt.SystemPrompt,
 	}
-	
+
 	userMessage := OllamaMessage{
 		Role:    "user",
 		Content: prompt.UserPrompt,
@@ -823,7 +823,7 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 		apiURL += "/"
 	}
 	apiURL += "api/chat"
-	
+
 	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(requestJSON))
 	if err != nil {
 		return fmt.Errorf("error creating HTTP request: %v", err)
@@ -881,14 +881,14 @@ func analyzeWithOpenAI(logs []LogEntry, config LLMConfig) error {
 	if modelName == "" {
 		modelName = getDefaultModel(config.Provider)
 	}
-	
+
 	// Try to get the human-friendly model name
 	modelInfo, found := GetModelInfo(config.Provider, modelName)
 	if found {
-		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s (%s)...\n",
 			config.Provider, modelInfo.Name, modelName)
 	} else {
-		fmt.Printf("Analyzing logs with %s API using %s...\n", 
+		fmt.Printf("Analyzing logs with %s API using %s...\n",
 			config.Provider, modelName)
 	}
 

@@ -15,32 +15,32 @@ import (
 
 var (
 	// Global flags
-	searchTerm     string
-	regexSearch    string
-	levelFilter    string
-	userFilter     string
-	startTime      string
-	endTime        string
-	jsonOutput     bool
-	csvOutput      string
-	outputFile     string
-	analyze        bool
-	aiAnalyze      bool
-	apiKey         string
-	llmProvider    string
-	llmModel       string
-	trim           bool
-	trimJSON       string
-	maxEntries     int
-	problem        string
-	thinkingBudget int
-	ollamaHost     string
-	ollamaTimeout  int
-	interactive    bool
-	verbose        bool
-	quiet          bool
+	searchTerm      string
+	regexSearch     string
+	levelFilter     string
+	userFilter      string
+	startTime       string
+	endTime         string
+	jsonOutput      bool
+	csvOutput       string
+	outputFile      string
+	analyze         bool
+	aiAnalyze       bool
+	apiKey          string
+	llmProvider     string
+	llmModel        string
+	trim            bool
+	trimJSON        string
+	maxEntries      int
+	problem         string
+	thinkingBudget  int
+	ollamaHost      string
+	ollamaTimeout   int
+	interactive     bool
+	verbose         bool
+	quiet           bool
 	verboseAnalysis bool
-	rawOutput      bool
+	rawOutput       bool
 
 	// Global logger
 	logger *slog.Logger
@@ -309,7 +309,7 @@ func init() {
 		registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return []string{"anthropic", "openai", "gemini", "ollama"}, cobra.ShellCompDirectiveNoFileComp
 		})
-		
+
 		// Add LLM model completion based on selected provider
 		registerFlagCompletion(cmd, "llm-model", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			// Get the provider flag value
@@ -317,14 +317,14 @@ func init() {
 			if provider == "" {
 				provider = "anthropic" // Default provider
 			}
-			
+
 			// Get available models for this provider
 			var modelNames []string
 			models := GetAvailableModels(LLMProvider(provider))
 			for _, model := range models {
 				modelNames = append(modelNames, model.ID)
 			}
-			
+
 			return modelNames, cobra.ShellCompDirectiveNoFileComp
 		})
 
@@ -378,7 +378,7 @@ func contains(slice []string, str string) bool {
 func processLogs(logs []LogEntry) error {
 	// Note: Filtering is already applied during log parsing in parseLogFile
 	// so by the time logs reach this function, they're already filtered
-	
+
 	// Check for AI analysis and API key first
 	if aiAnalyze {
 		// Get provider from flag
@@ -394,15 +394,15 @@ func processLogs(logs []LogEntry) error {
 			if apiKeyValue == "" {
 				envVar := getAPIKeyEnvVar(provider)
 				apiKeyValue = os.Getenv(envVar)
-				
+
 				if apiKeyValue == "" {
-					return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable", 
+					return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable",
 						provider, envVar)
 				}
 			}
 		}
 	}
-	
+
 	// Apply trim if requested
 	if trim {
 		logger.Info("Starting deduplication", "count", len(logs))
@@ -456,21 +456,21 @@ func processLogs(logs []LogEntry) error {
 		if !contains(supportedProviders, llmProvider) {
 			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
 		}
-		
+
 		// If using Ollama, set the Ollama-related variables from the flags
 		if llmProvider == "ollama" {
 			// Set the package's Ollama variables to the values from the flags
 			OllamaHost = ollamaHost
 			OllamaTimeout = ollamaTimeout
 		}
-		
+
 		provider := LLMProvider(llmProvider)
 		apiKeyValue := apiKey
 		// Only get API key for providers that need one
 		if provider != ProviderOllama && apiKeyValue == "" {
 			apiKeyValue = os.Getenv(getAPIKeyEnvVar(provider))
 		}
-		
+
 		// If trim was used, ask if user wants to send all remaining lines
 		entriesForAnalysis := maxEntries
 		if trim {
@@ -481,12 +481,12 @@ func processLogs(logs []LogEntry) error {
 				// Default to 'no' if there's an error with input
 				response = "n"
 			}
-			
+
 			if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
 				entriesForAnalysis = len(logs)
 			}
 		}
-		
+
 		// Configure LLM settings
 		model := llmModel
 		if model == "" {
@@ -500,7 +500,7 @@ func processLogs(logs []LogEntry) error {
 			Problem:        problem,
 			ThinkingBudget: thinkingBudget,
 		}
-		
+
 		if err := analyzeWithLLM(logs, config); err != nil {
 			return fmt.Errorf("error during LLM analysis: %v", err)
 		}

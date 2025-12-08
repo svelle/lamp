@@ -90,19 +90,19 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 		if log.Source != "" {
 			_, _ = fmt.Fprintf(writer, "  %sSource:%s %s\n", colorPurple, colorReset, log.Source)
 		}
-		
+
 		// Print notification-specific fields if available
 		if log.LogSource == "notifications" {
 			_, _ = fmt.Fprintf(writer, "  %sLog Source:%s %s\n", colorPurple, colorReset, log.LogSource)
-			
+
 			if log.AckID != "" {
 				_, _ = fmt.Fprintf(writer, "  %sAck ID:%s %s\n", colorPurple, colorReset, log.AckID)
 			}
-			
+
 			if log.Type != "" {
 				_, _ = fmt.Fprintf(writer, "  %sType:%s %s\n", colorPurple, colorReset, log.Type)
 			}
-			
+
 			if log.Status != "" {
 				_, _ = fmt.Fprintf(writer, "  %sStatus:%s %s\n", colorPurple, colorReset, log.Status)
 			}
