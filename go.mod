@@ -1,8 +1,6 @@
 module github.com/svelle/lamp
 
-go 1.23
-
-toolchain go1.23.7
+go 1.25
 
 require (
 	github.com/atotto/clipboard v0.1.4

@@ -38,7 +38,7 @@ func TestAnalyzeLogs(t *testing.T) {
 			Message:   "High CPU usage",
 			Source:    "monitor/cpu.go:30",
 		},
-		
+
 		// Day 2 - January 2nd
 		{
 			Timestamp: mustParseTime(t, "2025-01-02 09:20:00.000 Z"),
@@ -52,7 +52,7 @@ func TestAnalyzeLogs(t *testing.T) {
 			Message:   "Cache invalidated",
 			Source:    "cache/manager.go:55",
 		},
-		
+
 		// Day 3 - January 3rd
 		{
 			Timestamp: mustParseTime(t, "2025-01-03 11:30:00.000 Z"),
@@ -60,7 +60,7 @@ func TestAnalyzeLogs(t *testing.T) {
 			Message:   "Failed to send email",
 			Source:    "email/sender.go:87",
 		},
-		
+
 		// February 1st (different month)
 		{
 			Timestamp: mustParseTime(t, "2025-02-01 14:10:00.000 Z"),
@@ -68,7 +68,7 @@ func TestAnalyzeLogs(t *testing.T) {
 			Message:   "Monthly maintenance started",
 			Source:    "maintenance/scheduler.go:22",
 		},
-		
+
 		// March 1st (different month)
 		{
 			Timestamp: mustParseTime(t, "2025-03-01 15:45:00.000 Z"),
@@ -80,20 +80,20 @@ func TestAnalyzeLogs(t *testing.T) {
 
 	t.Run("analyze basic statistics", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
-		
+
 		// Check total entries
 		assert.Equal(t, 9, analysis.TotalEntries)
-		
+
 		// Check time range
 		assert.Equal(t, mustParseTime(t, "2025-01-01 10:00:00.000 Z"), analysis.TimeRange.Start)
 		assert.Equal(t, mustParseTime(t, "2025-03-01 15:45:00.000 Z"), analysis.TimeRange.End)
-		
+
 		// Check level counts
 		assert.Equal(t, 5, analysis.LevelCounts["INFO"])
 		assert.Equal(t, 2, analysis.LevelCounts["ERROR"])
 		assert.Equal(t, 1, analysis.LevelCounts["WARN"])
 		assert.Equal(t, 1, analysis.LevelCounts["DEBUG"])
-		
+
 		// Check error rate (~22.22%)
 		assert.InDelta(t, 22.22, analysis.ErrorRate, 0.1)
 	})
@@ -101,27 +101,27 @@ func TestAnalyzeLogs(t *testing.T) {
 	t.Run("analyze hour distribution", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
 		hourMap := make(map[string]int)
-		
+
 		for _, hour := range analysis.BusiestHours {
 			hourMap[hour.Item] = hour.Count
 		}
-		
-		assert.Equal(t, 1, hourMap["9"])   // 09:00 hour
-		assert.Equal(t, 3, hourMap["10"])  // 10:00 hour (busiest, 3 logs)
-		assert.Equal(t, 2, hourMap["11"])  // 11:00 hour
-		assert.Equal(t, 1, hourMap["12"])  // 12:00 hour
-		assert.Equal(t, 1, hourMap["14"])  // 14:00 hour
-		assert.Equal(t, 1, hourMap["15"])  // 15:00 hour
+
+		assert.Equal(t, 1, hourMap["9"])  // 09:00 hour
+		assert.Equal(t, 3, hourMap["10"]) // 10:00 hour (busiest, 3 logs)
+		assert.Equal(t, 2, hourMap["11"]) // 11:00 hour
+		assert.Equal(t, 1, hourMap["12"]) // 12:00 hour
+		assert.Equal(t, 1, hourMap["14"]) // 14:00 hour
+		assert.Equal(t, 1, hourMap["15"]) // 15:00 hour
 	})
 
 	t.Run("analyze day of week distribution", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
 		dayMap := make(map[string]int)
-		
+
 		for _, day := range analysis.ActivityByDayOfWeek {
 			dayMap[day.Item] = day.Count
 		}
-		
+
 		// In 2025, Jan 1 is a Wednesday, Jan 2 is Thursday, Jan 3 is Friday,
 		// Feb 1 is Saturday, Mar 1 is Saturday
 		assert.Equal(t, 4, dayMap["Wednesday"]) // Most entries on Wednesday
@@ -133,39 +133,39 @@ func TestAnalyzeLogs(t *testing.T) {
 	t.Run("analyze month distribution", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
 		monthMap := make(map[string]int)
-		
+
 		for _, month := range analysis.ActivityByMonth {
 			monthMap[month.Item] = month.Count
 		}
-		
-		assert.Equal(t, 7, monthMap["January"])  // Most entries in January
+
+		assert.Equal(t, 7, monthMap["January"]) // Most entries in January
 		assert.Equal(t, 1, monthMap["February"])
 		assert.Equal(t, 1, monthMap["March"])
 	})
 
 	t.Run("analyze level distribution by hour", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
-		
+
 		// Check hour 10 level distribution
 		hourLevels := analysis.HourLevelCounts[10]
 		assert.Equal(t, 2, hourLevels["INFO"])
-		assert.Equal(t, 0, hourLevels["ERROR"])  // We don't have ERROR logs at 10 hour
-		
+		assert.Equal(t, 0, hourLevels["ERROR"]) // We don't have ERROR logs at 10 hour
+
 		// Check hour 11 level distribution
 		hourLevels = analysis.HourLevelCounts[11]
-		assert.Equal(t, 0, hourLevels["INFO"])  // The actual values in the test data
+		assert.Equal(t, 0, hourLevels["INFO"]) // The actual values in the test data
 		assert.Equal(t, 2, hourLevels["ERROR"])
 	})
 
 	t.Run("analyze level distribution by day", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
-		
+
 		// Check Wednesday level distribution
 		wedLevels := analysis.DayLevelCounts["Wednesday"]
 		assert.Equal(t, 2, wedLevels["INFO"])
 		assert.Equal(t, 1, wedLevels["ERROR"])
 		assert.Equal(t, 1, wedLevels["WARN"])
-		
+
 		// Check Thursday level distribution
 		thuLevels := analysis.DayLevelCounts["Thursday"]
 		assert.Equal(t, 1, thuLevels["INFO"])
@@ -174,7 +174,7 @@ func TestAnalyzeLogs(t *testing.T) {
 
 	t.Run("analyze level distribution by month", func(t *testing.T) {
 		analysis := analyzeLogs(logs, false)
-		
+
 		// Check January level distribution
 		janLevels := analysis.MonthLevelCounts["January"]
 		assert.Equal(t, 3, janLevels["INFO"])
@@ -294,22 +294,22 @@ func TestDisplayAnalysis(t *testing.T) {
 		var buf bytes.Buffer
 		displayAnalysis(analysis, &buf, false, 10, true)
 		output := buf.String()
-		
+
 		// Check that all expected sections are present
 		assert.Contains(t, output, "=== MATTERMOST LOG ANALYSIS ===")
 		assert.Contains(t, output, "Levels:")
 		assert.Contains(t, output, "Activity by Hour:")
 		assert.Contains(t, output, "Activity by Day of Week:")
 		assert.Contains(t, output, "Activity by Month:")
-		
+
 		// Check time formatting
 		assert.Contains(t, output, "2025-01-01 10:00:00")
 		assert.Contains(t, output, "2025-03-01 15:45:00")
-		
+
 		// Check level distribution
 		assert.Contains(t, output, "INFO")
 		assert.Contains(t, output, "ERROR")
-		
+
 		// Check error rate
 		assert.Contains(t, output, "Error rate: 20.0%")
 	})
@@ -318,7 +318,7 @@ func TestDisplayAnalysis(t *testing.T) {
 		var buf bytes.Buffer
 		displayAnalysis(analysis, &buf, true, 8, true) // 8 unique entries out of 10 total
 		output := buf.String()
-		
+
 		// Check deduplication info (verbose analysis shows entries count and duration)
 		assert.Contains(t, output, "10 entries (8 unique)")
 		assert.Contains(t, output, "1421h45m0s")
@@ -331,14 +331,14 @@ func TestDisplayAnalysis(t *testing.T) {
 			Start: mustParseTime(t, "2025-01-01 10:00:00.000 Z"),
 			End:   mustParseTime(t, "2025-01-01 15:45:00.000 Z"),
 		}
-		
+
 		var buf bytes.Buffer
 		displayAnalysis(shortAnalysis, &buf, false, 10, true)
 		output := buf.String()
-		
+
 		// Day of week chart should NOT be present for short time ranges
 		assert.NotContains(t, output, "Activity by Day of Week:")
-		
+
 		// Month chart should NOT be present for short time ranges
 		assert.NotContains(t, output, "Activity by Month:")
 	})
@@ -370,7 +370,7 @@ func TestAnalyzeAndDisplayStats(t *testing.T) {
 		var buf bytes.Buffer
 		analyzeAndDisplayStats(logs, &buf, false, false)
 		output := buf.String()
-		
+
 		assert.Contains(t, output, "3 entries")
 		assert.NotContains(t, output, "Deduplication Ratio")
 	})
@@ -379,7 +379,7 @@ func TestAnalyzeAndDisplayStats(t *testing.T) {
 		var buf bytes.Buffer
 		analyzeAndDisplayStats([]LogEntry{}, &buf, false, false)
 		output := buf.String()
-		
+
 		assert.Contains(t, output, "No log entries to analyze.")
 	})
 
@@ -401,11 +401,11 @@ func TestAnalyzeAndDisplayStats(t *testing.T) {
 				DuplicateCount: 2,
 			},
 		}
-		
+
 		var buf bytes.Buffer
 		analyzeAndDisplayStats(duplicateLogs, &buf, true, false)
 		output := buf.String()
-		
+
 		assert.Contains(t, output, "5 entries (2 unique)")
 	})
 }

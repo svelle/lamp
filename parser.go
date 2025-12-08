@@ -212,8 +212,8 @@ func parseJSONLine(line string) (LogEntry, error) {
 	}
 	for k, v := range extra {
 		// Skip fields we already handle
-		if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" || 
-		   k == "logSource" || k == "ackId" || k == "type" || k == "status" {
+		if k == "timestamp" || k == "level" || k == "msg" || k == "caller" || k == "user_id" ||
+			k == "logSource" || k == "ackId" || k == "type" || k == "status" {
 			continue
 		}
 
@@ -243,7 +243,7 @@ func parseJSONLine(line string) (LogEntry, error) {
 	entry.Message = jsonEntry.Msg
 	entry.User = jsonEntry.UserID
 	entry.Source = jsonEntry.Caller
-	
+
 	// Set notification-specific fields if present
 	entry.LogSource = jsonEntry.LogSource
 	entry.AckID = jsonEntry.AckID
@@ -288,8 +288,8 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 
 	// Similarity threshold (0.0-1.0) - higher means more strict matching
 	const similarityThreshold = 0.8
-	const updateInterval = 10     // Update progress bar description every N entries
-	const batchSize = 100         // Process logs in batches to reduce memory pressure
+	const updateInterval = 10      // Update progress bar description every N entries
+	const batchSize = 100          // Process logs in batches to reduce memory pressure
 	const parallelThreshold = 1000 // Minimum log count to use parallel processing
 
 	// Create progress bar
@@ -318,7 +318,7 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 	if len(logs) >= parallelThreshold {
 		return trimDuplicateLogsParallel(logs, similarityThreshold, bar)
 	}
-	
+
 	return trimDuplicateLogsSequential(logs, similarityThreshold, batchSize, updateInterval, bar)
 }
 
@@ -326,10 +326,10 @@ func trimDuplicateLogInfo(logs []LogEntry) []LogEntry {
 func trimDuplicateLogsSequential(logs []LogEntry, similarityThreshold float64, batchSize, updateInterval int, bar *progressbar.ProgressBar) []LogEntry {
 	var result []LogEntry
 	processedEntries := make(map[int]bool)
-	
+
 	// Cache for normalized messages to avoid redundant processing
 	normalizedCache := make(map[int]string, len(logs))
-	
+
 	removedCount := 0
 
 	// Group entries by log level to reduce comparison space
@@ -417,7 +417,7 @@ func trimDuplicateLogsSequential(logs []LogEntry, similarityThreshold float64, b
 		if err := bar.Add(1); err != nil {
 			logger.Warn("Error updating progress bar", "error", err)
 		}
-		
+
 		// Periodically clear the cache to manage memory usage
 		if i > 0 && i%batchSize == 0 {
 			// Clear cache for already processed entries
@@ -441,30 +441,30 @@ func trimDuplicateLogsSequential(logs []LogEntry, similarityThreshold float64, b
 func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar *progressbar.ProgressBar) []LogEntry {
 	// Normalize all messages in parallel first
 	normalizedMsgs := make([]string, len(logs))
-	
+
 	// Group entries by log level to reduce comparison space
 	logsByLevel := make(map[string][]int)
 	for i, entry := range logs {
 		level := strings.ToLower(entry.Level)
 		logsByLevel[level] = append(logsByLevel[level], i)
 	}
-	
+
 	// Use a worker pool to normalize messages in parallel
 	workersCount := runtime.NumCPU()
 	bar.Describe("[cyan]Normalizing log messages in parallel[reset]")
-	
+
 	// Create a channel to distribute work
 	jobs := make(chan int, len(logs))
 	for i := range logs {
 		jobs <- i
 	}
 	close(jobs)
-	
+
 	// Use a sync.Mutex to protect the normalizedMsgs slice
 	var mutex sync.Mutex
 	var wg sync.WaitGroup
 	wg.Add(workersCount)
-	
+
 	// Launch workers
 	for w := 0; w < workersCount; w++ {
 		go func() {
@@ -474,7 +474,7 @@ func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar
 				mutex.Lock()
 				normalizedMsgs[i] = normalizedMsg
 				mutex.Unlock()
-				
+
 				// Update progress bar (safely)
 				mutex.Lock()
 				if err := bar.Add(1); err != nil {
@@ -484,10 +484,10 @@ func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar
 			}
 		}()
 	}
-	
+
 	// Wait for all normalizations to complete
 	wg.Wait()
-	
+
 	// Reset the progress bar for the main deduplication phase
 	bar.Reset()
 	bar.ChangeMax(len(logs))
@@ -495,20 +495,20 @@ func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar
 		logger.Warn("Error rendering progress bar", "error", err)
 	}
 	bar.Describe("[cyan]Deduplicating logs with parallel processing[reset]")
-	
+
 	var result []LogEntry
 	processedEntries := make(map[int]bool)
 	var resultMutex sync.Mutex
 	var processedMutex sync.Mutex
 	removedCount := 0
 	var removedMutex sync.Mutex
-	
+
 	// Process logs in chunks based on their level
 	var levelWg sync.WaitGroup
 	for level, indices := range logsByLevel {
-		if len(indices) < 10 {  // Process small groups sequentially
+		if len(indices) < 10 { // Process small groups sequentially
 			processLogGroup(
-				logs, normalizedMsgs, indices, level, similarityThreshold, 
+				logs, normalizedMsgs, indices, level, similarityThreshold,
 				&result, processedEntries, &removedCount, bar,
 				&resultMutex, &processedMutex, &removedMutex,
 			)
@@ -517,31 +517,31 @@ func trimDuplicateLogsParallel(logs []LogEntry, similarityThreshold float64, bar
 			go func(lvl string, idxs []int) {
 				defer levelWg.Done()
 				processLogGroup(
-					logs, normalizedMsgs, idxs, lvl, similarityThreshold, 
+					logs, normalizedMsgs, idxs, lvl, similarityThreshold,
 					&result, processedEntries, &removedCount, bar,
 					&resultMutex, &processedMutex, &removedMutex,
 				)
 			}(level, indices)
 		}
 	}
-	
+
 	levelWg.Wait()
-	
+
 	// Ensure the bar is completed
 	if err := bar.Finish(); err != nil {
 		logger.Warn("Error completing progress bar", "error", err)
 	}
-	
+
 	logger.Info("Parallel deduplication completed", "removed", removedCount)
 	return result
 }
 
 // processLogGroup processes a group of logs with the same level
 func processLogGroup(
-	logs []LogEntry, 
-	normalizedMsgs []string, 
-	indices []int, 
-	level string, 
+	logs []LogEntry,
+	normalizedMsgs []string,
+	indices []int,
+	level string,
 	similarityThreshold float64,
 	result *[]LogEntry,
 	processedEntries map[int]bool,
@@ -562,78 +562,78 @@ func processLogGroup(
 		}
 		processedEntries[i] = true
 		processedMutex.Unlock()
-		
+
 		// Add this entry to results (with initial duplicate count of 1)
 		entryWithCount := logs[i]
 		entryWithCount.DuplicateCount = 1
-		
+
 		resultMutex.Lock()
 		resultIndex := len(*result)
 		*result = append(*result, entryWithCount)
 		resultMutex.Unlock()
-		
+
 		// Get normalized message and its words
 		normalizedMsg := normalizedMsgs[i]
 		baseWords := strings.Fields(normalizedMsg)
-		
+
 		processedInThisIteration := 0
-		
+
 		// Compare with other entries of the same level
 		for _, j := range indices {
 			if j <= i {
 				continue
 			}
-			
+
 			// Skip if already processed
 			processedMutex.Lock()
 			isProcessed := processedEntries[j]
 			processedMutex.Unlock()
-			
+
 			if isProcessed {
 				continue
 			}
-			
+
 			// Check source similarity (early filter)
 			sourceSimilar := strings.EqualFold(logs[i].Source, logs[j].Source) ||
 				(len(logs[i].Source) > 0 && len(logs[j].Source) > 0 &&
 					stringSimilarity(logs[i].Source, logs[j].Source) > 0.7)
-					
+
 			if !sourceSimilar {
 				continue
 			}
-			
+
 			compMsg := normalizedMsgs[j]
-			
+
 			// Compare messages
 			if isSimilarMessage(normalizedMsg, compMsg, baseWords, similarityThreshold) {
 				// Mark as processed
 				processedMutex.Lock()
 				processedEntries[j] = true
 				processedMutex.Unlock()
-				
+
 				processedInThisIteration++
-				
+
 				// Increment counters
 				removedMutex.Lock()
 				*removedCount++
 				removedMutex.Unlock()
-				
+
 				// Update duplicate count
 				resultMutex.Lock()
 				(*result)[resultIndex].DuplicateCount++
 				resultMutex.Unlock()
 			}
 		}
-		
+
 		// Update progress periodically
 		if processedInThisIteration > 0 && processedInThisIteration%10 == 0 {
 			removedMutex.Lock()
 			currentRemoved := *removedCount
 			removedMutex.Unlock()
-			
+
 			bar.Describe(fmt.Sprintf("[cyan]Processed: %d - Removed: %d[reset]", i, currentRemoved))
 		}
-		
+
 		// Update progress bar
 		if err := bar.Add(1); err != nil {
 			logger.Warn("Error updating progress bar", "error", err)
@@ -728,7 +728,7 @@ func isSimilarMessage(msg1, msg2 string, msg1Words []string, threshold float64) 
 	// Optimize for common case: check word-based similarity first as it's usually faster
 	// and more effective for log messages than Levenshtein distance
 	msg2Words := strings.Fields(msg2)
-	
+
 	// Skip Jaccard similarity calculation if the word counts are very different
 	wordLenRatio := float64(min(len(msg1Words), len(msg2Words))) / float64(max(len(msg1Words), len(msg2Words)))
 	if wordLenRatio < 0.5 {
@@ -763,7 +763,7 @@ func isSimilarMessage(msg1, msg2 string, msg1Words []string, threshold float64) 
 	if jaccardSimilarity >= threshold*0.8 {
 		return stringSimilarity(msg1, msg2) >= threshold
 	}
-	
+
 	return false
 }
 
@@ -777,17 +777,17 @@ func levenshteinDistance(s1, s2 string) int {
 	if len(s2) == 0 {
 		return len(s1)
 	}
-	
+
 	// Optimization: swap strings so s1 is the shorter one
 	if len(s1) > len(s2) {
 		s1, s2 = s2, s1
 	}
-	
+
 	// Optimization: if strings are identical, return 0 immediately
 	if s1 == s2 {
 		return 0
 	}
-	
+
 	// Reuse vectors to avoid continuous allocations
 	v0 := make([]int, len(s2)+1)
 	v1 := make([]int, len(s2)+1)
@@ -801,7 +801,7 @@ func levenshteinDistance(s1, s2 string) int {
 	for i := 0; i < len(s1); i++ {
 		// First element of v1 is A[i+1][0]
 		v1[0] = i + 1
-		
+
 		// Track minimum value in this row to enable early termination
 		minValue := v1[0]
 
@@ -814,15 +814,15 @@ func levenshteinDistance(s1, s2 string) int {
 			} else {
 				cost = 1
 			}
-			
+
 			v1[j+1] = min(
-				v0[j+1] + 1,      // deletion
+				v0[j+1]+1, // deletion
 				min(
-					v1[j] + 1,     // insertion
-					v0[j] + cost,  // substitution
+					v1[j]+1,    // insertion
+					v0[j]+cost, // substitution
 				),
 			)
-			
+
 			// Track minimum value in this row
 			if v1[j+1] < minValue {
 				minValue = v1[j+1]
