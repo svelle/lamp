@@ -83,6 +83,9 @@ var fileCmd = &cobra.Command{
 				if aiAnalyze {
 					return fmt.Errorf("--ai-analyze requires interactive prompts and cannot be used with stdin input; provide a file path instead")
 				}
+				if interactive {
+					return fmt.Errorf("--interactive (TUI mode) cannot be used with stdin input; provide a file path instead")
+				}
 				logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
 				if err != nil {
 					return fmt.Errorf("error parsing stdin: %v", err)
@@ -111,6 +114,9 @@ var fileCmd = &cobra.Command{
 					}
 					if aiAnalyze {
 						return fmt.Errorf("--ai-analyze requires interactive prompts and cannot be used with stdin input; provide a file path instead")
+					}
+					if interactive {
+						return fmt.Errorf("--interactive (TUI mode) cannot be used with stdin input; provide a file path instead")
 					}
 				}
 			}
