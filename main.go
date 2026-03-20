@@ -18,6 +18,7 @@ var (
 	searchTerm      string
 	regexSearch     string
 	levelFilter     string
+	minLevelFilter  string
 	userFilter      string
 	startTime       string
 	endTime         string
@@ -66,6 +67,11 @@ var fileCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(2)
+		}
+
 		if len(args) == 1 {
 			// Single file mode
 			filePath := args[0]
@@ -73,7 +79,7 @@ var fileCmd = &cobra.Command{
 				return fmt.Errorf("file '%s' does not exist", filePath)
 			}
 
-			logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+			logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 			if err != nil {
 				return fmt.Errorf("error parsing log file: %v", err)
 			}
@@ -108,7 +114,7 @@ var fileCmd = &cobra.Command{
 					continue
 				}
 
-				logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+				logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 				if err != nil {
 					logger.Warn("Error parsing log file, skipping", "file", filePath, "error", err)
 					continue
@@ -144,12 +150,17 @@ var notificationCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(2)
+		}
+
 		filePath := args[0]
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return fmt.Errorf("notification log file '%s' does not exist", filePath)
 		}
 
-		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing notification log file: %v", err)
 		}
@@ -169,12 +180,17 @@ var supportPacketCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(2)
+		}
+
 		packetPath := args[0]
 		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
 		}
 
-		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
@@ -233,6 +249,24 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// levelRanks maps severity level names to their numeric rank for min-level comparisons.
+var levelRanks = map[string]int{"debug": 0, "info": 1, "warn": 2, "error": 3}
+
+// validateLevelFlags returns an error if --level and --min-level are both set, or if
+// minLevel is not a recognised value. The caller is responsible for printing to stderr
+// and exiting with the appropriate code.
+func validateLevelFlags(level, minLevel string) error {
+	if level != "" && minLevel != "" {
+		return fmt.Errorf("--level and --min-level are mutually exclusive")
+	}
+	if minLevel != "" {
+		if _, ok := levelRanks[strings.ToLower(minLevel)]; !ok {
+			return fmt.Errorf("invalid --min-level value %q: valid values are debug, info, warn, error", minLevel)
+		}
+	}
+	return nil
+}
+
 // registerFlagCompletion is a helper function that registers flag completion and panics on error
 func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)) {
 	if err := cmd.RegisterFlagCompletionFunc(flag, completionFunc); err != nil {
@@ -276,6 +310,7 @@ func init() {
 		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
 		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
+		cmd.Flags().StringVar(&minLevelFilter, "min-level", "", "Include only log entries at this severity level or higher (debug, info, warn, error)")
 		cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
 		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
 		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
@@ -303,6 +338,10 @@ func init() {
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+		})
+
+		registerFlagCompletion(cmd, "min-level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
 		})
 
 		// Add LLM provider completion
