@@ -11,15 +11,12 @@ import (
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // isStdinTTY reports whether os.Stdin is an interactive terminal.
 func isStdinTTY() bool {
-	fi, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (fi.Mode() & os.ModeCharDevice) != 0
+	return term.IsTerminal(int(os.Stdin.Fd()))
 }
 
 var (
@@ -83,6 +80,9 @@ var fileCmd = &cobra.Command{
 					fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
 					os.Exit(2)
 				}
+				if aiAnalyze {
+					return fmt.Errorf("--ai-analyze requires interactive prompts and cannot be used with stdin input; provide a file path instead")
+				}
 				logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
 				if err != nil {
 					return fmt.Errorf("error parsing stdin: %v", err)
@@ -104,9 +104,14 @@ var fileCmd = &cobra.Command{
 		} else {
 			// Multiple files mode — check for stdin before opening the progress bar
 			for _, filePath := range args {
-				if filePath == "-" && isStdinTTY() {
-					fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
-					os.Exit(2)
+				if filePath == "-" {
+					if isStdinTTY() {
+						fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
+						os.Exit(2)
+					}
+					if aiAnalyze {
+						return fmt.Errorf("--ai-analyze requires interactive prompts and cannot be used with stdin input; provide a file path instead")
+					}
 				}
 			}
 
