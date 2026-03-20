@@ -13,6 +13,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// isStdinTTY reports whether os.Stdin is an interactive terminal.
+func isStdinTTY() bool {
+	fi, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (fi.Mode() & os.ModeCharDevice) != 0
+}
+
 var (
 	// Global flags
 	searchTerm      string
@@ -69,6 +78,19 @@ var fileCmd = &cobra.Command{
 		if len(args) == 1 {
 			// Single file mode
 			filePath := args[0]
+			if filePath == "-" {
+				if isStdinTTY() {
+					fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
+					os.Exit(2)
+				}
+				logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+				if err != nil {
+					return fmt.Errorf("error parsing stdin: %v", err)
+				}
+				logger.Debug("Processed file", "file", "<stdin>", "entries", len(logs))
+				return processLogs(logs)
+			}
+
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				return fmt.Errorf("file '%s' does not exist", filePath)
 			}
@@ -80,7 +102,14 @@ var fileCmd = &cobra.Command{
 
 			return processLogs(logs)
 		} else {
-			// Multiple files mode
+			// Multiple files mode — check for stdin before opening the progress bar
+			for _, filePath := range args {
+				if filePath == "-" && isStdinTTY() {
+					fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
+					os.Exit(2)
+				}
+			}
+
 			var allLogs []LogEntry
 
 			// Create progress bar for file processing
@@ -101,6 +130,17 @@ var fileCmd = &cobra.Command{
 			for _, filePath := range args {
 				if err := bar.Add(1); err != nil {
 					logger.Warn("Error updating progress bar", "error", err)
+				}
+
+				if filePath == "-" {
+					logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+					if err != nil {
+						logger.Warn("Error parsing stdin, skipping", "error", err)
+						continue
+					}
+					allLogs = append(allLogs, logs...)
+					logger.Debug("Processed file", "file", "<stdin>", "entries", len(logs))
+					continue
 				}
 
 				if _, err := os.Stat(filePath); os.IsNotExist(err) {
