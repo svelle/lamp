@@ -111,6 +111,7 @@ var fileCmd = &cobra.Command{
 			}
 
 			var allLogs []LogEntry
+			stdinConsumed := false
 
 			// Create progress bar for file processing
 			bar := progressbar.NewOptions(len(args),
@@ -133,7 +134,12 @@ var fileCmd = &cobra.Command{
 				}
 
 				if filePath == "-" {
+					if stdinConsumed {
+						logger.Warn("Duplicate \"-\" argument, stdin already consumed, skipping")
+						continue
+					}
 					logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+					stdinConsumed = true
 					if err != nil {
 						logger.Warn("Error parsing stdin, skipping", "error", err)
 						continue
