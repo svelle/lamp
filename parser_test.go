@@ -413,13 +413,15 @@ func TestMinLevelFilter(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
-	// Write a log file with all four levels
+	// Write a log file with all four standard levels plus fatal and panic
 	logPath := filepath.Join(tempDir, "test.log")
 	lines := []string{
 		`debug [2025-01-01 10:00:00.000 Z] Cache hit caller="cache/store.go:78"`,
 		`info [2025-01-01 10:01:00.000 Z] System started caller="system/init.go:42"`,
 		`warn [2025-01-01 10:02:00.000 Z] High memory usage caller="monitor/usage.go:91"`,
 		`error [2025-01-01 10:03:00.000 Z] Connection failed caller="network/conn.go:123"`,
+		`fatal [2025-01-01 10:04:00.000 Z] Unrecoverable error caller="server/main.go:10"`,
+		`panic [2025-01-01 10:05:00.000 Z] Nil pointer dereference caller="server/main.go:20"`,
 	}
 	f, err := os.Create(logPath)
 	require.NoError(t, err)
@@ -432,23 +434,26 @@ func TestMinLevelFilter(t *testing.T) {
 	t.Run("warn threshold includes warn and error only", func(t *testing.T) {
 		logs, err := parseLogFile(logPath, "", "", "", "warn", "", "", "")
 		require.NoError(t, err)
-		assert.Equal(t, 2, len(logs))
+		// warn, error, fatal, panic — 4 entries (fatal/panic are unknown = treated as higher than error)
+		assert.Equal(t, 4, len(logs))
 		for _, entry := range logs {
-			assert.Contains(t, []string{"warn", "error"}, entry.Level)
+			assert.NotContains(t, []string{"debug", "info"}, entry.Level)
 		}
 	})
 
-	t.Run("error threshold includes error only", func(t *testing.T) {
+	t.Run("error threshold includes error, fatal, and panic", func(t *testing.T) {
 		logs, err := parseLogFile(logPath, "", "", "", "error", "", "", "")
 		require.NoError(t, err)
-		assert.Equal(t, 1, len(logs))
-		assert.Equal(t, "error", logs[0].Level)
+		assert.Equal(t, 3, len(logs))
+		for _, entry := range logs {
+			assert.Contains(t, []string{"error", "fatal", "panic"}, entry.Level)
+		}
 	})
 
 	t.Run("debug threshold includes all entries", func(t *testing.T) {
 		logs, err := parseLogFile(logPath, "", "", "", "debug", "", "", "")
 		require.NoError(t, err)
-		assert.Equal(t, 4, len(logs))
+		assert.Equal(t, 6, len(logs))
 	})
 }
 

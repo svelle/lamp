@@ -844,11 +844,12 @@ func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp,
 		return false
 	}
 
-	// Apply min-level filter
+	// Apply min-level filter. Unknown levels (e.g. "fatal", "panic") are treated
+	// as higher than "error" so they are always included.
 	if minLevelFilter != "" {
 		minRank := levelRanks[strings.ToLower(minLevelFilter)]
 		entryRank, ok := levelRanks[strings.ToLower(entry.Level)]
-		if !ok || entryRank < minRank {
+		if ok && entryRank < minRank {
 			return false
 		}
 	}
