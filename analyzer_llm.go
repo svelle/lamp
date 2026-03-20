@@ -45,6 +45,8 @@ type LLMConfig struct {
 	MaxEntries     int
 	Problem        string
 	ThinkingBudget int
+	OllamaHost     string
+	OllamaTimeout  int
 }
 
 // AnalysisPrompt contains the prepared prompt data for LLM analysis
@@ -818,7 +820,16 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Create HTTP request using the configured Ollama host
-	apiURL := OllamaHost
+	ollamaHost := config.OllamaHost
+	if ollamaHost == "" {
+		ollamaHost = OllamaHost // fall back to package-level default
+	}
+	ollamaTimeout := config.OllamaTimeout
+	if ollamaTimeout == 0 {
+		ollamaTimeout = OllamaTimeout // fall back to package-level default
+	}
+
+	apiURL := ollamaHost
 	if !strings.HasSuffix(apiURL, "/") {
 		apiURL += "/"
 	}
@@ -834,11 +845,11 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 
 	// Create HTTP client with the configured timeout
 	client := &http.Client{
-		Timeout: time.Duration(OllamaTimeout) * time.Second,
+		Timeout: time.Duration(ollamaTimeout) * time.Second,
 	}
 
 	// Send request
-	fmt.Printf("Sending request to local Ollama instance (timeout: %d seconds)...\n", OllamaTimeout)
+	fmt.Printf("Sending request to local Ollama instance (timeout: %d seconds)...\n", ollamaTimeout)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error sending request to Ollama: %v", err)

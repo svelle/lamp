@@ -51,6 +51,7 @@ var (
 	ollamaHost      string
 	ollamaTimeout   int
 	interactive     bool
+	autoConfirm     bool
 	verbose         bool
 	quiet           bool
 	verboseAnalysis bool
@@ -338,6 +339,7 @@ func addAIFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(&ollamaTimeout, "ollama-timeout", 120, "Timeout in seconds for Ollama requests (only for ollama provider)")
 	cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to LLM")
 	cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
+	cmd.Flags().BoolVar(&autoConfirm, "yes", false, "Skip confirmation prompts and use --max-entries limit")
 
 	registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"anthropic", "openai", "gemini", "ollama"}, cobra.ShellCompDirectiveNoFileComp
@@ -621,14 +623,9 @@ func runAIAnalysis(logs []LogEntry) error {
 		}
 	}
 
-	if provider == ProviderOllama {
-		OllamaHost = ollamaHost
-		OllamaTimeout = ollamaTimeout
-	}
-
 	// After trimming, ask if user wants to send all remaining entries
 	entriesForAnalysis := maxEntries
-	if trim {
+	if trim && !autoConfirm && isTerminal() {
 		fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
 		var response string
 		_, err := fmt.Scanln(&response)
@@ -651,10 +648,21 @@ func runAIAnalysis(logs []LogEntry) error {
 		MaxEntries:     entriesForAnalysis,
 		Problem:        problem,
 		ThinkingBudget: thinkingBudget,
+		OllamaHost:     ollamaHost,
+		OllamaTimeout:  ollamaTimeout,
 	}
 
 	if err := analyzeWithLLM(logs, config); err != nil {
 		return fmt.Errorf("error during LLM analysis: %v", err)
 	}
 	return nil
+}
+
+// isTerminal reports whether stdin is connected to an interactive terminal.
+func isTerminal() bool {
+	stat, err := os.Stdin.Stat()
+	if err != nil {
+		return false
+	}
+	return (stat.Mode() & os.ModeCharDevice) != 0
 }

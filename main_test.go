@@ -79,7 +79,6 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command arguments for multiple files
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().StringVar(&formatOutput, "format", "", "Output format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 
 		// Enable raw output to test log content
@@ -117,7 +116,6 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command with level filter
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().StringVar(&formatOutput, "format", "", "Output format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 
 		// Set the level filter to info and enable raw output
@@ -234,7 +232,6 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command with trim flag
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().StringVar(&formatOutput, "format", "", "Output format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 
 		// Enable trimming and raw output
@@ -381,7 +378,7 @@ func TestExitCodeFromCommands(t *testing.T) {
 
 	t.Run("non-existent file: RunE returns error with exit code 1", func(t *testing.T) {
 		nonExistent := filepath.Join(tempDir, "missing.log")
-		err := fileCmd.RunE(nil, []string{nonExistent})
+		err := fileCmd.RunE(&cobra.Command{}, []string{nonExistent})
 		require.Error(t, err)
 		assert.Equal(t, 1, exitCodeForError(err, true))
 	})
@@ -391,7 +388,7 @@ func TestExitCodeFromCommands(t *testing.T) {
 		r, w, _ := os.Pipe()
 		os.Stdout = w
 
-		err := fileCmd.RunE(nil, []string{cleanLogPath})
+		err := fileCmd.RunE(&cobra.Command{}, []string{cleanLogPath})
 
 		_ = w.Close()
 		os.Stdout = oldStdout
@@ -402,5 +399,3 @@ func TestExitCodeFromCommands(t *testing.T) {
 	})
 }
 
-// formatOutput is kept for backward-compatibility with tests that reference the old flag name.
-var formatOutput string
