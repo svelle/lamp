@@ -21,7 +21,7 @@ var (
 	userFilter      string
 	startTime       string
 	endTime         string
-	jsonOutput      bool
+	formatOutput    string // "text", "json", "raw" — default ""
 	csvOutput       string
 	outputFile      string
 	analyze         bool
@@ -40,7 +40,6 @@ var (
 	verbose         bool
 	quiet           bool
 	verboseAnalysis bool
-	rawOutput       bool
 
 	// Global logger
 	logger *slog.Logger
@@ -279,7 +278,7 @@ func init() {
 		cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
 		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
 		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+		cmd.Flags().StringVar(&formatOutput, "format", "", `Output format: "text" (default), "json", or "raw"`)
 		cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
 		cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
@@ -298,7 +297,6 @@ func init() {
 		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
 		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
 		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis with all sections")
-		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw log entries instead of analysis (old default behavior)")
 
 		// Add custom completion for flags
 		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -341,8 +339,13 @@ func init() {
 			return nil, cobra.ShellCompDirectiveDefault
 		})
 
+		// Add format flag completion
+		registerFlagCompletion(cmd, "format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"text", "json", "raw"}, cobra.ShellCompDirectiveNoFileComp
+		})
+
 		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "verbose-analysis", "raw"} {
+		for _, flag := range []string{"analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "verbose-analysis"} {
 			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
 			})
@@ -447,6 +450,11 @@ func processLogs(logs []LogEntry) error {
 		return nil
 	}
 
+	// Validate format flag
+	if formatOutput != "" && formatOutput != "text" && formatOutput != "json" && formatOutput != "raw" {
+		return fmt.Errorf("invalid --format value %q: must be text, json, or raw", formatOutput)
+	}
+
 	// Display logs in the requested format
 	switch {
 	case aiAnalyze:
@@ -504,15 +512,16 @@ func processLogs(logs []LogEntry) error {
 		if err := analyzeWithLLM(logs, config); err != nil {
 			return fmt.Errorf("error during LLM analysis: %v", err)
 		}
-	case analyze:
-		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
-	case jsonOutput:
-		displayLogsJSON(logs, output)
-	case rawOutput:
+
+	case formatOutput == "raw":
 		displayLogsPretty(logs, output)
-	default:
-		// Default to compact analysis instead of dumping all logs
-		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
+
+	default: // --analyze, --format text/json, or no flags
+		if formatOutput == "json" {
+			displayAnalysisJSON(logs, output, !trim)
+		} else {
+			analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
+		}
 	}
 
 	return nil

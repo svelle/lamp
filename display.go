@@ -121,20 +121,42 @@ func displayLogsPretty(logs []LogEntry, writer io.Writer) {
 	_, _ = fmt.Fprintf(writer, "\nDisplayed %d log entries\n", len(logs))
 }
 
-// displayLogsJSON outputs logs in JSON format
-func displayLogsJSON(logs []LogEntry, writer io.Writer) {
+// displayAnalysisJSON outputs log analysis statistics in JSON format
+func displayAnalysisJSON(logs []LogEntry, writer io.Writer, showDupes bool) {
 	if len(logs) == 0 {
-		_, _ = fmt.Fprintln(writer, "[]")
+		_, _ = fmt.Fprintln(writer, "{}")
 		return
 	}
 
-	output, err := json.MarshalIndent(logs, "", "  ")
+	hasDuplicateCounts := false
+	uniqueEntries := len(logs)
+	totalEntries := 0
+	for _, log := range logs {
+		count := log.DuplicateCount
+		if count > 1 {
+			hasDuplicateCounts = true
+		}
+		if count == 0 {
+			count = 1
+		}
+		totalEntries += count
+	}
+
+	type analysisOutput struct {
+		LogAnalysis
+		IsDeduplicated bool `json:"is_deduplicated"`
+		UniqueEntries  int  `json:"unique_entries"`
+	}
+
+	analysis := analyzeLogs(logs, showDupes)
+	isDeduplicated := hasDuplicateCounts && totalEntries > uniqueEntries && showDupes
+
+	out, err := json.MarshalIndent(analysisOutput{analysis, isDeduplicated, uniqueEntries}, "", "  ")
 	if err != nil {
 		_, _ = fmt.Fprintf(writer, "Error formatting JSON: %v\n", err)
 		return
 	}
-
-	_, _ = fmt.Fprintln(writer, string(output))
+	_, _ = fmt.Fprintln(writer, string(out))
 }
 
 // exportToCSV exports log entries to a CSV file
