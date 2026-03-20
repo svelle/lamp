@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -77,9 +79,8 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command arguments for multiple files
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+		cmd.Flags().StringVar(&formatOutput, "format", "", "Output format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
-		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
 
 		// Enable raw output to test log content
 		rawOutput = true
@@ -116,9 +117,8 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command with level filter
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+		cmd.Flags().StringVar(&formatOutput, "format", "", "Output format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
-		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
 
 		// Set the level filter to info and enable raw output
 		levelFilter = "info"
@@ -131,7 +131,7 @@ func TestMultiFileCommand(t *testing.T) {
 		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
-		levelFilter = ""  // Reset for other tests
+		levelFilter = "" // Reset for other tests
 		rawOutput = false // Reset for other tests
 
 		var buf bytes.Buffer
@@ -158,7 +158,6 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 
 		// Call the RunE function with single non-existent file
@@ -180,7 +179,6 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 
 		// Create a buffer to capture logs
@@ -236,9 +234,8 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command with trim flag
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+		cmd.Flags().StringVar(&formatOutput, "format", "", "Output format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
-		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw logs instead of analysis")
 
 		// Enable trimming and raw output
 		trim = true
@@ -301,7 +298,6 @@ func TestMultiFileCommand(t *testing.T) {
 		// Set up command with analyze flag
 		cmd := &cobra.Command{}
 		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
 		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze log patterns")
 		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis")
@@ -346,3 +342,65 @@ func TestMultiFileCommand(t *testing.T) {
 		assert.Contains(t, output, "Fri")
 	})
 }
+
+func TestExitCodeForError(t *testing.T) {
+	t.Run("nil error returns 0", func(t *testing.T) {
+		assert.Equal(t, 0, exitCodeForError(nil, true))
+		assert.Equal(t, 0, exitCodeForError(nil, false))
+	})
+
+	t.Run("preRun not entered returns 2 (cobra misuse)", func(t *testing.T) {
+		err := fmt.Errorf("accepts at least 1 arg(s), received 0")
+		assert.Equal(t, 2, exitCodeForError(err, false))
+	})
+
+	t.Run("MisuseError returns 2", func(t *testing.T) {
+		err := newMisuseError("invalid --llm-provider value %q", "bad")
+		assert.Equal(t, 2, exitCodeForError(err, true))
+	})
+
+	t.Run("general error with preRun entered returns 1", func(t *testing.T) {
+		err := fmt.Errorf("file not found")
+		assert.Equal(t, 1, exitCodeForError(err, true))
+	})
+}
+
+func TestExitCodeFromCommands(t *testing.T) {
+	initLogger()
+
+	tempDir, err := os.MkdirTemp("", "lamp-exitcode-test-")
+	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// File with no error-level entries
+	cleanLogPath := filepath.Join(tempDir, "clean.log")
+	require.NoError(t, os.WriteFile(cleanLogPath, []byte(
+		`info [2025-01-01 10:00:00.000 Z] System started caller="system/init.go:42"`+"\n"+
+			`warn [2025-01-01 10:01:00.000 Z] Low disk space caller="monitor/disk.go:55"`+"\n",
+	), 0600))
+
+	t.Run("non-existent file: RunE returns error with exit code 1", func(t *testing.T) {
+		nonExistent := filepath.Join(tempDir, "missing.log")
+		err := fileCmd.RunE(nil, []string{nonExistent})
+		require.Error(t, err)
+		assert.Equal(t, 1, exitCodeForError(err, true))
+	})
+
+	t.Run("valid file: RunE returns nil with exit code 0", func(t *testing.T) {
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		err := fileCmd.RunE(nil, []string{cleanLogPath})
+
+		_ = w.Close()
+		os.Stdout = oldStdout
+		_, _ = io.Copy(io.Discard, r)
+
+		require.NoError(t, err)
+		assert.Equal(t, 0, exitCodeForError(err, true))
+	})
+}
+
+// formatOutput is kept for backward-compatibility with tests that reference the old flag name.
+var formatOutput string

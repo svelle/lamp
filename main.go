@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -12,6 +13,20 @@ import (
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 )
+
+// MisuseError represents incorrect command usage (invalid flag values, wrong args, etc.).
+// Commands that detect misuse should return this type so main can exit with code 2.
+type MisuseError struct{ msg string }
+
+func (e *MisuseError) Error() string { return e.msg }
+
+func newMisuseError(format string, args ...any) error {
+	return &MisuseError{msg: fmt.Sprintf(format, args...)}
+}
+
+// enteredPreRun is set true once PersistentPreRun fires, meaning cobra accepted the
+// command (flags parsed, arg count valid). Errors before this point are misuse (exit 2).
+var enteredPreRun bool
 
 var (
 	// Global flags
@@ -25,7 +40,6 @@ var (
 	csvOutput       string
 	outputFile      string
 	analyze         bool
-	aiAnalyze       bool
 	apiKey          string
 	llmProvider     string
 	llmModel        string
@@ -54,6 +68,7 @@ var rootCmd = &cobra.Command{
 and support packets. It provides various filtering options, analysis capabilities,
 and AI-powered insights using LLM technology.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		enteredPreRun = true
 		initLogger()
 	},
 }
@@ -61,75 +76,22 @@ and AI-powered insights using LLM technology.`,
 var fileCmd = &cobra.Command{
 	Use:   "file [path...]",
 	Short: "Parse and analyze one or more Mattermost log files",
-	Args:  cobra.MinimumNArgs(1),
+	Long: `Parse and analyze one or more Mattermost log files.
+
+Exit codes:
+  0  Success
+  1  General error (e.g., file not found, parse failure)
+  2  Misuse (e.g., invalid flag value or missing required argument)`,
+	Args: cobra.MinimumNArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if len(args) == 1 {
-			// Single file mode
-			filePath := args[0]
-			if _, err := os.Stat(filePath); os.IsNotExist(err) {
-				return fmt.Errorf("file '%s' does not exist", filePath)
-			}
-
-			logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
-			if err != nil {
-				return fmt.Errorf("error parsing log file: %v", err)
-			}
-
-			return processLogs(logs)
-		} else {
-			// Multiple files mode
-			var allLogs []LogEntry
-
-			// Create progress bar for file processing
-			bar := progressbar.NewOptions(len(args),
-				progressbar.OptionEnableColorCodes(true),
-				progressbar.OptionSetWidth(40),
-				progressbar.OptionShowCount(),
-				progressbar.OptionSetDescription("[cyan]Processing log files[reset]"),
-				progressbar.OptionSetTheme(progressbar.Theme{
-					Saucer:        "[green]=[reset]",
-					SaucerHead:    "[green]>[reset]",
-					SaucerPadding: " ",
-					BarStart:      "[",
-					BarEnd:        "]",
-				}))
-
-			// Process each file
-			for _, filePath := range args {
-				if err := bar.Add(1); err != nil {
-					logger.Warn("Error updating progress bar", "error", err)
-				}
-
-				if _, err := os.Stat(filePath); os.IsNotExist(err) {
-					logger.Warn("File does not exist, skipping", "file", filePath)
-					continue
-				}
-
-				logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
-				if err != nil {
-					logger.Warn("Error parsing log file, skipping", "file", filePath, "error", err)
-					continue
-				}
-
-				allLogs = append(allLogs, logs...)
-				logger.Debug("Processed file", "file", filePath, "entries", len(logs))
-			}
-
-			if len(allLogs) == 0 {
-				return fmt.Errorf("no valid log entries found in any of the provided files")
-			}
-
-			// Sort all logs by timestamp
-			sort.Slice(allLogs, func(i, j int) bool {
-				return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
-			})
-
-			logger.Info("Finished processing files", "total_files", len(args), "total_entries", len(allLogs))
-			return processLogs(allLogs)
+		logs, err := loadFileLogs(args)
+		if err != nil {
+			return err
 		}
+		return processLogs(logs)
 	},
 }
 
@@ -161,7 +123,13 @@ var notificationCmd = &cobra.Command{
 var supportPacketCmd = &cobra.Command{
 	Use:   "support-packet [path]",
 	Short: "Parse and analyze a Mattermost support packet zip file",
-	Args:  cobra.ExactArgs(1),
+	Long: `Parse and analyze a Mattermost support packet zip file.
+
+Exit codes:
+  0  Success
+  1  General error (e.g., file not found, parse failure)
+  2  Misuse (e.g., invalid flag value or missing required argument)`,
+	Args: cobra.ExactArgs(1),
 	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		if len(args) != 0 {
 			return nil, cobra.ShellCompDirectiveNoFileComp
@@ -184,6 +152,75 @@ var supportPacketCmd = &cobra.Command{
 		}
 
 		return processLogs(logs)
+	},
+}
+
+// aiCmd is the parent for AI-powered log analysis subcommands.
+var aiCmd = &cobra.Command{
+	Use:   "ai-analyze",
+	Short: "Analyze Mattermost logs using AI",
+	Long:  `Send parsed log entries to an LLM for analysis. Use subcommands to specify the log source.`,
+}
+
+var aiFileCmd = &cobra.Command{
+	Use:   "file [path...]",
+	Short: "AI analyze one or more Mattermost log files",
+	Args:  cobra.MinimumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logs, err := loadFileLogs(args)
+		if err != nil {
+			return err
+		}
+		return runAIAnalysis(logs)
+	},
+}
+
+var aiNotificationCmd = &cobra.Command{
+	Use:   "notification [path]",
+	Short: "AI analyze a Mattermost notification log file",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		filePath := args[0]
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return fmt.Errorf("notification log file '%s' does not exist", filePath)
+		}
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			return fmt.Errorf("error parsing notification log file: %v", err)
+		}
+		return runAIAnalysis(logs)
+	},
+}
+
+var aiSupportPacketCmd = &cobra.Command{
+	Use:   "support-packet [path]",
+	Short: "AI analyze a Mattermost support packet zip file",
+	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) != 0 {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
+	},
+	RunE: func(cmd *cobra.Command, args []string) error {
+		packetPath := args[0]
+		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
+			return fmt.Errorf("support packet '%s' does not exist", packetPath)
+		}
+		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			return fmt.Errorf("error parsing support packet: %v", err)
+		}
+		return runAIAnalysis(logs)
 	},
 }
 
@@ -240,6 +277,88 @@ func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func
 	}
 }
 
+// addFilterFlags registers log filtering flags shared by all processing commands.
+func addFilterFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
+	cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
+	cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
+	cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
+	cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
+	cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
+	cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
+
+	registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	registerFlagCompletion(cmd, "trim", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	for _, flag := range []string{"start", "end"} {
+		registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"2006-01-02 15:04:05.000"}, cobra.ShellCompDirectiveNoFileComp
+		})
+	}
+}
+
+// addOutputFlags registers output format flags for standard (non-AI) commands.
+func addOutputFlags(cmd *cobra.Command) {
+	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+	cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
+	cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
+	cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
+	cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
+	cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
+	cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis with all sections")
+	cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw log entries instead of analysis (old default behavior)")
+
+	registerFlagCompletion(cmd, "csv", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveDefault
+	})
+	registerFlagCompletion(cmd, "output", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveDefault
+	})
+	registerFlagCompletion(cmd, "trim-json", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveDefault
+	})
+	for _, flag := range []string{"json", "analyze", "interactive", "verbose-analysis", "raw"} {
+		registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+		})
+	}
+}
+
+// addAIFlags registers LLM-specific flags for ai-analyze subcommands.
+func addAIFlags(cmd *cobra.Command) {
+	cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for LLM provider")
+	cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai, gemini, ollama)")
+	cmd.Flags().StringVar(&llmModel, "llm-model", "", "LLM model to use (defaults to provider-specific default)")
+	cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
+	cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for extended thinking mode (only supported by some models)")
+	cmd.Flags().StringVar(&ollamaHost, "ollama-host", "http://localhost:11434", "Ollama server URL (only for ollama provider)")
+	cmd.Flags().IntVar(&ollamaTimeout, "ollama-timeout", 120, "Timeout in seconds for Ollama requests (only for ollama provider)")
+	cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to LLM")
+	cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
+
+	registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"anthropic", "openai", "gemini", "ollama"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	registerFlagCompletion(cmd, "llm-model", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		provider := cmd.Flag("llm-provider").Value.String()
+		if provider == "" {
+			provider = "anthropic"
+		}
+		var modelNames []string
+		models := GetAvailableModels(LLMProvider(provider))
+		for _, model := range models {
+			modelNames = append(modelNames, model.ID)
+		}
+		return modelNames, cobra.ShellCompDirectiveNoFileComp
+	})
+	registerFlagCompletion(cmd, "trim-json", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return nil, cobra.ShellCompDirectiveDefault
+	})
+}
+
 func initLogger() {
 	// Set log level based on flags
 	logLevel := slog.LevelInfo
@@ -264,103 +383,64 @@ func init() {
 	// Enable command completion
 	rootCmd.CompletionOptions.DisableDefaultCmd = false
 
-	// Add subcommands to root command
+	// --verbose and --quiet apply to all subcommands
+	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
+	rootCmd.PersistentFlags().BoolVar(&quiet, "quiet", false, "Only output errors")
+	registerFlagCompletion(rootCmd, "verbose", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	registerFlagCompletion(rootCmd, "quiet", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
+	})
+
+	// Add subcommands to root
 	rootCmd.AddCommand(fileCmd)
 	rootCmd.AddCommand(notificationCmd)
 	rootCmd.AddCommand(supportPacketCmd)
+	rootCmd.AddCommand(aiCmd)
 	rootCmd.AddCommand(versionCmd)
 
-	// Add shared flags to all file processing subcommands
-	commands := []*cobra.Command{fileCmd, notificationCmd, supportPacketCmd}
-	for _, cmd := range commands {
-		cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
-		cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
-		cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
-		cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
-		cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
-		cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
-		cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
-		cmd.Flags().StringVar(&csvOutput, "csv", "", "Export logs to CSV file at specified path")
-		cmd.Flags().StringVar(&outputFile, "output", "", "Save output to file instead of stdout")
-		cmd.Flags().BoolVar(&analyze, "analyze", false, "Analyze logs and show statistics")
-		cmd.Flags().BoolVar(&aiAnalyze, "ai-analyze", false, "Analyze logs using AI")
-		cmd.Flags().StringVar(&apiKey, "api-key", "", "API key for LLM provider")
-		cmd.Flags().StringVar(&llmProvider, "llm-provider", "anthropic", "LLM provider to use (anthropic, openai, gemini, ollama)")
-		cmd.Flags().StringVar(&llmModel, "llm-model", "", "LLM model to use (defaults to provider-specific default)")
-		cmd.Flags().BoolVar(&trim, "trim", false, "Remove entries with duplicate information")
-		cmd.Flags().StringVar(&trimJSON, "trim-json", "", "Write deduplicated logs to a JSON file at specified path")
-		cmd.Flags().IntVar(&maxEntries, "max-entries", 100, "Maximum number of log entries to send to LLM")
-		cmd.Flags().StringVar(&problem, "problem", "", "Description of the problem you're investigating")
-		cmd.Flags().IntVar(&thinkingBudget, "thinking-budget", 0, "Token budget for extended thinking mode (only supported by some models)")
-		cmd.Flags().StringVar(&ollamaHost, "ollama-host", "http://localhost:11434", "Ollama server URL (only for ollama provider)")
-		cmd.Flags().IntVar(&ollamaTimeout, "ollama-timeout", 120, "Timeout in seconds for Ollama requests (only for ollama provider)")
-		cmd.Flags().BoolVar(&interactive, "interactive", false, "Launch interactive TUI mode")
-		cmd.Flags().BoolVar(&verbose, "verbose", false, "Enable verbose output logging")
-		cmd.Flags().BoolVar(&quiet, "quiet", false, "Only output errors")
-		cmd.Flags().BoolVar(&verboseAnalysis, "verbose-analysis", false, "Show detailed analysis with all sections")
-		cmd.Flags().BoolVar(&rawOutput, "raw", false, "Output raw log entries instead of analysis (old default behavior)")
+	// Add AI subcommands
+	aiCmd.AddCommand(aiFileCmd)
+	aiCmd.AddCommand(aiNotificationCmd)
+	aiCmd.AddCommand(aiSupportPacketCmd)
 
-		// Add custom completion for flags
-		registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
-		})
+	// Flags for standard log processing commands
+	for _, cmd := range []*cobra.Command{fileCmd, notificationCmd, supportPacketCmd} {
+		addFilterFlags(cmd)
+		addOutputFlags(cmd)
+	}
 
-		// Add LLM provider completion
-		registerFlagCompletion(cmd, "llm-provider", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return []string{"anthropic", "openai", "gemini", "ollama"}, cobra.ShellCompDirectiveNoFileComp
-		})
-
-		// Add LLM model completion based on selected provider
-		registerFlagCompletion(cmd, "llm-model", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			// Get the provider flag value
-			provider := cmd.Flag("llm-provider").Value.String()
-			if provider == "" {
-				provider = "anthropic" // Default provider
-			}
-
-			// Get available models for this provider
-			var modelNames []string
-			models := GetAvailableModels(LLMProvider(provider))
-			for _, model := range models {
-				modelNames = append(modelNames, model.ID)
-			}
-
-			return modelNames, cobra.ShellCompDirectiveNoFileComp
-		})
-
-		// Add file completion for flags that expect file paths
-		registerFlagCompletion(cmd, "csv", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return nil, cobra.ShellCompDirectiveDefault
-		})
-
-		registerFlagCompletion(cmd, "output", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return nil, cobra.ShellCompDirectiveDefault
-		})
-
-		registerFlagCompletion(cmd, "trim-json", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-			return nil, cobra.ShellCompDirectiveDefault
-		})
-
-		// Add boolean flag completion
-		for _, flag := range []string{"json", "analyze", "ai-analyze", "trim", "interactive", "verbose", "quiet", "verbose-analysis", "raw"} {
-			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-				return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
-			})
-		}
-
-		// Add time format hint completion
-		for _, flag := range []string{"start", "end"} {
-			registerFlagCompletion(cmd, flag, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-				return []string{"2006-01-02 15:04:05.000"}, cobra.ShellCompDirectiveNoFileComp
-			})
-		}
+	// Flags for AI analysis commands
+	for _, cmd := range []*cobra.Command{aiFileCmd, aiNotificationCmd, aiSupportPacketCmd} {
+		addFilterFlags(cmd)
+		addAIFlags(cmd)
 	}
 }
 
+// exitCodeForError returns the appropriate exit code for err.
+//
+// Exit 2 is used when the error is a MisuseError or when cobra never entered
+// PersistentPreRun (meaning it rejected the command before execution — wrong
+// arg count, unknown flag, etc.). Exit 1 is used for all other errors.
+func exitCodeForError(err error, preRunEntered bool) int {
+	if err == nil {
+		return 0
+	}
+	var misuseErr *MisuseError
+	if !preRunEntered || errors.As(err, &misuseErr) {
+		return 2
+	}
+	return 1
+}
+
 func main() {
+	rootCmd.SilenceErrors = true
+	rootCmd.SilenceUsage = true
+
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(exitCodeForError(err, enteredPreRun))
 	}
 }
 
@@ -374,35 +454,69 @@ func contains(slice []string, str string) bool {
 	return false
 }
 
-// processLogs handles the common log processing logic
-func processLogs(logs []LogEntry) error {
-	// Note: Filtering is already applied during log parsing in parseLogFile
-	// so by the time logs reach this function, they're already filtered
-
-	// Check for AI analysis and API key first
-	if aiAnalyze {
-		// Get provider from flag
-		provider := LLMProvider(llmProvider)
-		if provider == "" {
-			provider = ProviderAnthropic // Default to Anthropic
+// loadFileLogs loads and merges log entries from one or more files.
+func loadFileLogs(paths []string) ([]LogEntry, error) {
+	if len(paths) == 1 {
+		filePath := paths[0]
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			return nil, fmt.Errorf("file '%s' does not exist", filePath)
 		}
-
-		// Skip API key check for Ollama which doesn't need one
-		if provider != ProviderOllama {
-			// Get key from flag or env
-			apiKeyValue := apiKey
-			if apiKeyValue == "" {
-				envVar := getAPIKeyEnvVar(provider)
-				apiKeyValue = os.Getenv(envVar)
-
-				if apiKeyValue == "" {
-					return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable",
-						provider, envVar)
-				}
-			}
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing log file: %v", err)
 		}
+		return logs, nil
 	}
 
+	var allLogs []LogEntry
+
+	bar := progressbar.NewOptions(len(paths),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetWidth(40),
+		progressbar.OptionShowCount(),
+		progressbar.OptionSetDescription("[cyan]Processing log files[reset]"),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
+
+	for _, filePath := range paths {
+		if err := bar.Add(1); err != nil {
+			logger.Warn("Error updating progress bar", "error", err)
+		}
+
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			logger.Warn("File does not exist, skipping", "file", filePath)
+			continue
+		}
+
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		if err != nil {
+			logger.Warn("Error parsing log file, skipping", "file", filePath, "error", err)
+			continue
+		}
+
+		allLogs = append(allLogs, logs...)
+		logger.Debug("Processed file", "file", filePath, "entries", len(logs))
+	}
+
+	if len(allLogs) == 0 {
+		return nil, fmt.Errorf("no valid log entries found in any of the provided files")
+	}
+
+	sort.Slice(allLogs, func(i, j int) bool {
+		return allLogs[i].Timestamp.Before(allLogs[j].Timestamp)
+	})
+
+	logger.Info("Finished processing files", "total_files", len(paths), "total_entries", len(allLogs))
+	return allLogs, nil
+}
+
+// processLogs handles output for the standard (non-AI) commands.
+func processLogs(logs []LogEntry) error {
 	// Apply trim if requested
 	if trim {
 		logger.Info("Starting deduplication", "count", len(logs))
@@ -449,61 +563,6 @@ func processLogs(logs []LogEntry) error {
 
 	// Display logs in the requested format
 	switch {
-	case aiAnalyze:
-		// Get provider from flag (we already validated the API key above)
-		// Validate llmProvider flag
-		supportedProviders := []string{"anthropic", "openai", "gemini", "ollama"}
-		if !contains(supportedProviders, llmProvider) {
-			return fmt.Errorf("invalid LLM provider: %s. Supported providers are: %s", llmProvider, strings.Join(supportedProviders, ", "))
-		}
-
-		// If using Ollama, set the Ollama-related variables from the flags
-		if llmProvider == "ollama" {
-			// Set the package's Ollama variables to the values from the flags
-			OllamaHost = ollamaHost
-			OllamaTimeout = ollamaTimeout
-		}
-
-		provider := LLMProvider(llmProvider)
-		apiKeyValue := apiKey
-		// Only get API key for providers that need one
-		if provider != ProviderOllama && apiKeyValue == "" {
-			apiKeyValue = os.Getenv(getAPIKeyEnvVar(provider))
-		}
-
-		// If trim was used, ask if user wants to send all remaining lines
-		entriesForAnalysis := maxEntries
-		if trim {
-			fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
-			var response string
-			_, err := fmt.Scanln(&response)
-			if err != nil {
-				// Default to 'no' if there's an error with input
-				response = "n"
-			}
-
-			if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
-				entriesForAnalysis = len(logs)
-			}
-		}
-
-		// Configure LLM settings
-		model := llmModel
-		if model == "" {
-			model = GetDefaultModel(provider)
-		}
-		config := LLMConfig{
-			Provider:       provider,
-			Model:          model,
-			APIKey:         apiKeyValue,
-			MaxEntries:     entriesForAnalysis,
-			Problem:        problem,
-			ThinkingBudget: thinkingBudget,
-		}
-
-		if err := analyzeWithLLM(logs, config); err != nil {
-			return fmt.Errorf("error during LLM analysis: %v", err)
-		}
 	case analyze:
 		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
 	case jsonOutput:
@@ -515,5 +574,87 @@ func processLogs(logs []LogEntry) error {
 		analyzeAndDisplayStats(logs, output, !trim, verboseAnalysis)
 	}
 
+	return nil
+}
+
+// runAIAnalysis sends logs to the configured LLM for analysis.
+func runAIAnalysis(logs []LogEntry) error {
+	provider := LLMProvider(llmProvider)
+	if provider == "" {
+		provider = ProviderAnthropic
+	}
+
+	// Validate provider
+	supportedProviders := []string{"anthropic", "openai", "gemini", "ollama"}
+	if !contains(supportedProviders, string(provider)) {
+		return newMisuseError("invalid LLM provider: %s. Supported providers are: %s", provider, strings.Join(supportedProviders, ", "))
+	}
+
+	// Validate API key (not required for Ollama)
+	apiKeyValue := apiKey
+	if provider != ProviderOllama {
+		if apiKeyValue == "" {
+			envVar := getAPIKeyEnvVar(provider)
+			apiKeyValue = os.Getenv(envVar)
+			if apiKeyValue == "" {
+				return fmt.Errorf("%s API key is required for AI analysis. Set with --api-key or %s environment variable",
+					provider, envVar)
+			}
+		}
+	}
+
+	// Apply trim if requested
+	if trim {
+		logger.Info("Starting deduplication", "count", len(logs))
+		originalCount := len(logs)
+		logs = trimDuplicateLogInfo(logs)
+		logger.Info("finished deduplication",
+			"original", originalCount,
+			"final", len(logs),
+			"removed", originalCount-len(logs))
+
+		if trimJSON != "" {
+			if err := writeLogsToJSON(logs, trimJSON); err != nil {
+				return fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
+			}
+			logger.Info("wrote deduplicated logs", "file", trimJSON)
+		}
+	}
+
+	if provider == ProviderOllama {
+		OllamaHost = ollamaHost
+		OllamaTimeout = ollamaTimeout
+	}
+
+	// After trimming, ask if user wants to send all remaining entries
+	entriesForAnalysis := maxEntries
+	if trim {
+		fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
+		var response string
+		_, err := fmt.Scanln(&response)
+		if err != nil {
+			response = "n"
+		}
+		if strings.ToLower(response) == "y" || strings.ToLower(response) == "yes" {
+			entriesForAnalysis = len(logs)
+		}
+	}
+
+	model := llmModel
+	if model == "" {
+		model = GetDefaultModel(provider)
+	}
+	config := LLMConfig{
+		Provider:       provider,
+		Model:          model,
+		APIKey:         apiKeyValue,
+		MaxEntries:     entriesForAnalysis,
+		Problem:        problem,
+		ThinkingBudget: thinkingBudget,
+	}
+
+	if err := analyzeWithLLM(logs, config); err != nil {
+		return fmt.Errorf("error during LLM analysis: %v", err)
+	}
 	return nil
 }
