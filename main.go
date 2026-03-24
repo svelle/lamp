@@ -499,9 +499,24 @@ func contains(slice []string, str string) bool {
 }
 
 // loadFileLogs loads and merges log entries from one or more files.
+// A path of "-" reads from stdin.
 func loadFileLogs(paths []string) ([]LogEntry, error) {
 	if len(paths) == 1 {
 		filePath := paths[0]
+		if filePath == "-" {
+			if isStdinTTY() {
+				return nil, &MisuseError{msg: "stdin is a TTY; pipe log data into lamp or provide a file path"}
+			}
+			if interactive {
+				return nil, &MisuseError{msg: "--interactive (TUI mode) cannot be used with stdin input; provide a file path instead"}
+			}
+			logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
+			if err != nil {
+				return nil, fmt.Errorf("error parsing stdin: %v", err)
+			}
+			logger.Debug("Processed file", "file", "<stdin>", "entries", len(logs))
+			return logs, nil
+		}
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("file '%s' does not exist", filePath)
 		}
@@ -512,7 +527,20 @@ func loadFileLogs(paths []string) ([]LogEntry, error) {
 		return logs, nil
 	}
 
+	// Multiple files mode — validate stdin args before opening the progress bar
+	for _, filePath := range paths {
+		if filePath == "-" {
+			if isStdinTTY() {
+				return nil, &MisuseError{msg: "stdin is a TTY; pipe log data into lamp or provide a file path"}
+			}
+			if interactive {
+				return nil, &MisuseError{msg: "--interactive (TUI mode) cannot be used with stdin input; provide a file path instead"}
+			}
+		}
+	}
+
 	var allLogs []LogEntry
+	stdinConsumed := false
 
 	bar := progressbar.NewOptions(len(paths),
 		progressbar.OptionEnableColorCodes(true),
@@ -530,6 +558,22 @@ func loadFileLogs(paths []string) ([]LogEntry, error) {
 	for _, filePath := range paths {
 		if err := bar.Add(1); err != nil {
 			logger.Warn("Error updating progress bar", "error", err)
+		}
+
+		if filePath == "-" {
+			if stdinConsumed {
+				logger.Warn("Duplicate \"-\" argument, stdin already consumed, skipping")
+				continue
+			}
+			logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
+			stdinConsumed = true
+			if err != nil {
+				logger.Warn("Error parsing stdin, skipping", "error", err)
+				continue
+			}
+			allLogs = append(allLogs, logs...)
+			logger.Debug("Processed file", "file", "<stdin>", "entries", len(logs))
+			continue
 		}
 
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {

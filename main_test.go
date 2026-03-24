@@ -129,7 +129,7 @@ func TestMultiFileCommand(t *testing.T) {
 		// Restore stdout and reset flags
 		_ = w.Close()
 		os.Stdout = oldStdout
-		levelFilter = "" // Reset for other tests
+		levelFilter = ""  // Reset for other tests
 		rawOutput = false // Reset for other tests
 
 		var buf bytes.Buffer
@@ -340,6 +340,107 @@ func TestMultiFileCommand(t *testing.T) {
 	})
 }
 
+func TestStdinSupport(t *testing.T) {
+	initLogger()
+
+	logLines := strings.Join([]string{
+		`info [2025-01-01 10:00:00.000 Z] System started caller="system/init.go:42"`,
+		`error [2025-01-01 10:05:00.000 Z] Connection failed caller="network/conn.go:123" error="timeout"`,
+	}, "\n") + "\n"
+
+	pipeStdin := func(t *testing.T, data string) (restore func()) {
+		t.Helper()
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		_, err = io.WriteString(w, data)
+		require.NoError(t, err)
+		require.NoError(t, w.Close())
+		orig := os.Stdin
+		os.Stdin = r
+		return func() {
+			os.Stdin = orig
+			_ = r.Close()
+		}
+	}
+
+	captureStdout := func(t *testing.T) (restore func() string) {
+		t.Helper()
+		r, w, err := os.Pipe()
+		require.NoError(t, err)
+		orig := os.Stdout
+		os.Stdout = w
+		return func() string {
+			_ = w.Close()
+			os.Stdout = orig
+			var buf bytes.Buffer
+			_, _ = buf.ReadFrom(r)
+			return buf.String()
+		}
+	}
+
+	t.Run("single stdin reads log entries", func(t *testing.T) {
+		restoreStdin := pipeStdin(t, logLines)
+		defer restoreStdin()
+		getOutput := captureStdout(t)
+
+		rawOutput = true
+		defer func() { rawOutput = false }()
+
+		err := fileCmd.RunE(&cobra.Command{}, []string{"-"})
+		output := getOutput()
+
+		require.NoError(t, err)
+		assert.Contains(t, output, "System started")
+		assert.Contains(t, output, "Connection failed")
+	})
+
+	t.Run("stdin mixed with file", func(t *testing.T) {
+		tempDir, err := os.MkdirTemp("", "lamp-stdin-test-")
+		require.NoError(t, err)
+		defer func() { _ = os.RemoveAll(tempDir) }()
+
+		filePath := filepath.Join(tempDir, "extra.log")
+		require.NoError(t, os.WriteFile(filePath, []byte(
+			`warn [2025-01-01 10:03:00.000 Z] Disk space low caller="monitor/disk.go:55"`+"\n",
+		), 0600))
+
+		restoreStdin := pipeStdin(t, logLines)
+		defer restoreStdin()
+		getOutput := captureStdout(t)
+
+		rawOutput = true
+		defer func() { rawOutput = false }()
+
+		err = fileCmd.RunE(&cobra.Command{}, []string{"-", filePath})
+		output := getOutput()
+
+		require.NoError(t, err)
+		assert.Contains(t, output, "System started")
+		assert.Contains(t, output, "Connection failed")
+		assert.Contains(t, output, "Disk space low")
+	})
+
+	t.Run("duplicate stdin argument skips second read", func(t *testing.T) {
+		restoreStdin := pipeStdin(t, logLines)
+		defer restoreStdin()
+
+		var logBuf bytes.Buffer
+		origLogger := logger
+		logger = slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+		defer func() { logger = origLogger }()
+
+		getOutput := captureStdout(t)
+		rawOutput = true
+		defer func() { rawOutput = false }()
+
+		err := fileCmd.RunE(&cobra.Command{}, []string{"-", "-"})
+		getOutput()
+
+		require.NoError(t, err)
+		assert.Contains(t, logBuf.String(), "stdin already consumed")
+	})
+}
+
 func TestExitCodeForError(t *testing.T) {
 	t.Run("nil error returns 0", func(t *testing.T) {
 		assert.Equal(t, 0, exitCodeForError(nil, true))
@@ -398,4 +499,3 @@ func TestExitCodeFromCommands(t *testing.T) {
 		assert.Equal(t, 0, exitCodeForError(err, true))
 	})
 }
-
