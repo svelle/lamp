@@ -118,8 +118,7 @@ var notificationCmd = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
-			fmt.Fprintln(os.Stderr, "Error:", err)
-			os.Exit(2)
+			return &MisuseError{msg: err.Error()}
 		}
 
 		filePath := args[0]
@@ -154,8 +153,7 @@ Exit codes:
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
-			fmt.Fprintln(os.Stderr, "Error:", err)
-			os.Exit(2)
+			return &MisuseError{msg: err.Error()}
 		}
 
 		packetPath := args[0]
@@ -191,6 +189,9 @@ var aiFileCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			return &MisuseError{msg: err.Error()}
+		}
 		logs, err := loadFileLogs(args)
 		if err != nil {
 			return err
@@ -210,6 +211,9 @@ var aiNotificationCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			return &MisuseError{msg: err.Error()}
+		}
 		filePath := args[0]
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return fmt.Errorf("notification log file '%s' does not exist", filePath)
@@ -233,6 +237,9 @@ var aiSupportPacketCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			return &MisuseError{msg: err.Error()}
+		}
 		packetPath := args[0]
 		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
@@ -706,7 +713,7 @@ func runAIAnalysis(logs []LogEntry) error {
 
 	// After trimming, ask if user wants to send all remaining entries
 	entriesForAnalysis := maxEntries
-	if trim && !autoConfirm && isTerminal() {
+	if trim && !autoConfirm && isStdinTTY() {
 		fmt.Printf("After trimming, there are %d log entries. Would you like to analyze all of them? (y/n): ", len(logs))
 		var response string
 		_, err := fmt.Scanln(&response)
@@ -739,11 +746,3 @@ func runAIAnalysis(logs []LogEntry) error {
 	return nil
 }
 
-// isTerminal reports whether stdin is connected to an interactive terminal.
-func isTerminal() bool {
-	stat, err := os.Stdin.Stat()
-	if err != nil {
-		return false
-	}
-	return (stat.Mode() & os.ModeCharDevice) != 0
-}
