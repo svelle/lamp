@@ -48,11 +48,11 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, minLevelFilte
 		return nil, err
 	}
 	defer func() { _ = file.Close() }()
-	return parseLogReader(file, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr)
+	return parseLogReader(file, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr)
 }
 
 // parseLogReader reads and parses log entries from an io.Reader, applying filters
-func parseLogReader(r io.Reader, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
+func parseLogReader(r io.Reader, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	// Parse time range filters if provided
 	var startTime, endTime time.Time
 	if startTimeStr != "" {

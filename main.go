@@ -92,7 +92,7 @@ var fileCmd = &cobra.Command{
 				if interactive {
 					return fmt.Errorf("--interactive (TUI mode) cannot be used with stdin input; provide a file path instead")
 				}
-				logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+				logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 				if err != nil {
 					return fmt.Errorf("error parsing stdin: %v", err)
 				}
@@ -155,7 +155,7 @@ var fileCmd = &cobra.Command{
 						logger.Warn("Duplicate \"-\" argument, stdin already consumed, skipping")
 						continue
 					}
-					logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+					logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 					stdinConsumed = true
 					if err != nil {
 						logger.Warn("Error parsing stdin, skipping", "error", err)
