@@ -287,7 +287,7 @@ func TestMultiFileLogProcessing(t *testing.T) {
 
 		// Process each file
 		for _, filePath := range filePaths {
-			logs, err := parseLogFile(filePath, "", "", "", "", "", "")
+			logs, err := parseLogFile(filePath, "", "", "", "", "", "", "")
 			require.NoError(t, err)
 			allLogs = append(allLogs, logs...)
 		}
@@ -320,7 +320,7 @@ func TestMultiFileLogProcessing(t *testing.T) {
 
 		// Process each file with level filter
 		for _, filePath := range filePaths {
-			logs, err := parseLogFile(filePath, "", "", "info", "", "", "")
+			logs, err := parseLogFile(filePath, "", "", "info", "", "", "", "")
 			require.NoError(t, err)
 			allLogs = append(allLogs, logs...)
 		}
@@ -359,7 +359,7 @@ func TestMultiFileLogProcessing(t *testing.T) {
 		endTime := "2025-01-01 10:06:00.000"
 
 		for _, filePath := range filePaths {
-			logs, err := parseLogFile(filePath, "", "", "", "", startTime, endTime)
+			logs, err := parseLogFile(filePath, "", "", "", "", "", startTime, endTime)
 			require.NoError(t, err)
 			allLogs = append(allLogs, logs...)
 		}
@@ -393,7 +393,7 @@ func TestMultiFileLogProcessing(t *testing.T) {
 
 		// Process each file, skipping errors
 		for _, filePath := range mixedPaths {
-			logs, err := parseLogFile(filePath, "", "", "", "", "", "")
+			logs, err := parseLogFile(filePath, "", "", "", "", "", "", "")
 			if err == nil {
 				allLogs = append(allLogs, logs...)
 			}
@@ -401,5 +401,83 @@ func TestMultiFileLogProcessing(t *testing.T) {
 
 		// We should still have logs from the valid file
 		assert.Equal(t, 2, len(allLogs))
+	})
+}
+
+func TestMinLevelFilter(t *testing.T) {
+	// Initialize the logger for tests
+	initLogger()
+
+	// Create temporary directory
+	tempDir, err := os.MkdirTemp("", "lamp-minlevel-test-")
+	require.NoError(t, err)
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Write a log file with all four standard levels plus fatal and panic
+	logPath := filepath.Join(tempDir, "test.log")
+	lines := []string{
+		`debug [2025-01-01 10:00:00.000 Z] Cache hit caller="cache/store.go:78"`,
+		`info [2025-01-01 10:01:00.000 Z] System started caller="system/init.go:42"`,
+		`warn [2025-01-01 10:02:00.000 Z] High memory usage caller="monitor/usage.go:91"`,
+		`error [2025-01-01 10:03:00.000 Z] Connection failed caller="network/conn.go:123"`,
+		`fatal [2025-01-01 10:04:00.000 Z] Unrecoverable error caller="server/main.go:10"`,
+		`panic [2025-01-01 10:05:00.000 Z] Nil pointer dereference caller="server/main.go:20"`,
+	}
+	f, err := os.Create(logPath)
+	require.NoError(t, err)
+	for _, l := range lines {
+		_, err = f.WriteString(l + "\n")
+		require.NoError(t, err)
+	}
+	_ = f.Close()
+
+	t.Run("warn threshold includes warn and error only", func(t *testing.T) {
+		logs, err := parseLogFile(logPath, "", "", "", "warn", "", "", "")
+		require.NoError(t, err)
+		// warn, error, fatal, panic — 4 entries (fatal/panic are unknown = treated as higher than error)
+		assert.Equal(t, 4, len(logs))
+		for _, entry := range logs {
+			assert.NotContains(t, []string{"debug", "info"}, entry.Level)
+		}
+	})
+
+	t.Run("error threshold includes error, fatal, and panic", func(t *testing.T) {
+		logs, err := parseLogFile(logPath, "", "", "", "error", "", "", "")
+		require.NoError(t, err)
+		assert.Equal(t, 3, len(logs))
+		for _, entry := range logs {
+			assert.Contains(t, []string{"error", "fatal", "panic"}, entry.Level)
+		}
+	})
+
+	t.Run("debug threshold includes all entries", func(t *testing.T) {
+		logs, err := parseLogFile(logPath, "", "", "", "debug", "", "", "")
+		require.NoError(t, err)
+		assert.Equal(t, 6, len(logs))
+	})
+}
+
+func TestValidateLevelFlags(t *testing.T) {
+	t.Run("both level and min-level returns error", func(t *testing.T) {
+		err := validateLevelFlags("error", "warn")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "mutually exclusive")
+	})
+
+	t.Run("invalid min-level value returns error", func(t *testing.T) {
+		err := validateLevelFlags("", "critical")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid --min-level value")
+		assert.Contains(t, err.Error(), "debug, info, warn, error")
+	})
+
+	t.Run("valid min-level returns no error", func(t *testing.T) {
+		for _, level := range []string{"debug", "info", "warn", "error", "DEBUG", "WARN"} {
+			assert.NoError(t, validateLevelFlags("", level))
+		}
+	})
+
+	t.Run("empty flags returns no error", func(t *testing.T) {
+		assert.NoError(t, validateLevelFlags("", ""))
 	})
 }
