@@ -12,6 +12,7 @@ import (
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 // MisuseError represents incorrect command usage (invalid flag values, wrong args, etc.).
@@ -28,11 +29,17 @@ func newMisuseError(format string, args ...any) error {
 // command (flags parsed, arg count valid). Errors before this point are misuse (exit 2).
 var enteredPreRun bool
 
+// isStdinTTY reports whether os.Stdin is an interactive terminal.
+func isStdinTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
 var (
 	// Global flags
 	searchTerm      string
 	regexSearch     string
 	levelFilter     string
+	minLevelFilter  string
 	userFilter      string
 	startTime       string
 	endTime         string
@@ -88,6 +95,9 @@ Exit codes:
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			return &MisuseError{msg: err.Error()}
+		}
 		logs, err := loadFileLogs(args)
 		if err != nil {
 			return err
@@ -107,12 +117,17 @@ var notificationCmd = &cobra.Command{
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(2)
+		}
+
 		filePath := args[0]
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return fmt.Errorf("notification log file '%s' does not exist", filePath)
 		}
 
-		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing notification log file: %v", err)
 		}
@@ -138,12 +153,17 @@ Exit codes:
 		return nil, cobra.ShellCompDirectiveFilterFileExt | cobra.ShellCompDirectiveDefault
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := validateLevelFlags(levelFilter, minLevelFilter); err != nil {
+			fmt.Fprintln(os.Stderr, "Error:", err)
+			os.Exit(2)
+		}
+
 		packetPath := args[0]
 		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
 		}
 
-		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
@@ -194,7 +214,7 @@ var aiNotificationCmd = &cobra.Command{
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return fmt.Errorf("notification log file '%s' does not exist", filePath)
 		}
-		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing notification log file: %v", err)
 		}
@@ -217,7 +237,7 @@ var aiSupportPacketCmd = &cobra.Command{
 		if _, err := os.Stat(packetPath); os.IsNotExist(err) {
 			return fmt.Errorf("support packet '%s' does not exist", packetPath)
 		}
-		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseSupportPacket(packetPath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return fmt.Errorf("error parsing support packet: %v", err)
 		}
@@ -271,6 +291,24 @@ var versionCmd = &cobra.Command{
 	},
 }
 
+// levelRanks maps severity level names to their numeric rank for min-level comparisons.
+var levelRanks = map[string]int{"debug": 0, "info": 1, "warn": 2, "error": 3}
+
+// validateLevelFlags returns an error if --level and --min-level are both set, or if
+// minLevel is not a recognised value. The caller is responsible for printing to stderr
+// and exiting with the appropriate code.
+func validateLevelFlags(level, minLevel string) error {
+	if level != "" && minLevel != "" {
+		return fmt.Errorf("--level and --min-level are mutually exclusive")
+	}
+	if minLevel != "" {
+		if _, ok := levelRanks[strings.ToLower(minLevel)]; !ok {
+			return fmt.Errorf("invalid --min-level value %q: valid values are debug, info, warn, error", minLevel)
+		}
+	}
+	return nil
+}
+
 // registerFlagCompletion is a helper function that registers flag completion and panics on error
 func registerFlagCompletion(cmd *cobra.Command, flag string, completionFunc func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)) {
 	if err := cmd.RegisterFlagCompletionFunc(flag, completionFunc); err != nil {
@@ -283,6 +321,7 @@ func addFilterFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&searchTerm, "search", "", "Search term to filter logs")
 	cmd.Flags().StringVar(&regexSearch, "regex", "", "Regular expression pattern to filter logs")
 	cmd.Flags().StringVar(&levelFilter, "level", "", "Filter logs by level (info, error, debug, etc.)")
+	cmd.Flags().StringVar(&minLevelFilter, "min-level", "", "Include only log entries at this severity level or higher (debug, info, warn, error)")
 	cmd.Flags().StringVar(&userFilter, "user", "", "Filter logs by username")
 	cmd.Flags().StringVar(&startTime, "start", "", "Filter logs after this time (format: 2006-01-02 15:04:05.000)")
 	cmd.Flags().StringVar(&endTime, "end", "", "Filter logs before this time (format: 2006-01-02 15:04:05.000)")
@@ -290,6 +329,9 @@ func addFilterFlags(cmd *cobra.Command) {
 
 	registerFlagCompletion(cmd, "level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"debug", "info", "warn", "error", "fatal", "panic"}, cobra.ShellCompDirectiveNoFileComp
+	})
+	registerFlagCompletion(cmd, "min-level", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"debug", "info", "warn", "error"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	registerFlagCompletion(cmd, "trim", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return []string{"true", "false"}, cobra.ShellCompDirectiveNoFileComp
@@ -429,8 +471,8 @@ func exitCodeForError(err error, preRunEntered bool) int {
 	if err == nil {
 		return 0
 	}
-	var misuseErr *MisuseError
-	if !preRunEntered || errors.As(err, &misuseErr) {
+
+	if _, ok := errors.AsType[*MisuseError](err); !preRunEntered || ok {
 		return 2
 	}
 	return 1
@@ -463,7 +505,7 @@ func loadFileLogs(paths []string) ([]LogEntry, error) {
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			return nil, fmt.Errorf("file '%s' does not exist", filePath)
 		}
-		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			return nil, fmt.Errorf("error parsing log file: %v", err)
 		}
@@ -495,7 +537,7 @@ func loadFileLogs(paths []string) ([]LogEntry, error) {
 			continue
 		}
 
-		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, userFilter, startTime, endTime)
+		logs, err := parseLogFile(filePath, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
 		if err != nil {
 			logger.Warn("Error parsing log file, skipping", "file", filePath, "error", err)
 			continue
@@ -517,24 +559,32 @@ func loadFileLogs(paths []string) ([]LogEntry, error) {
 	return allLogs, nil
 }
 
+// applyTrim deduplicates logs when --trim is set, optionally writing results to --trim-json.
+func applyTrim(logs []LogEntry) ([]LogEntry, error) {
+	if !trim {
+		return logs, nil
+	}
+	logger.Info("Starting deduplication", "count", len(logs))
+	originalCount := len(logs)
+	logs = trimDuplicateLogInfo(logs)
+	logger.Info("finished deduplication",
+		"original", originalCount,
+		"final", len(logs),
+		"removed", originalCount-len(logs))
+	if trimJSON != "" {
+		if err := writeLogsToJSON(logs, trimJSON); err != nil {
+			return nil, fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
+		}
+		logger.Info("wrote deduplicated logs", "file", trimJSON)
+	}
+	return logs, nil
+}
+
 // processLogs handles output for the standard (non-AI) commands.
 func processLogs(logs []LogEntry) error {
-	// Apply trim if requested
-	if trim {
-		logger.Info("Starting deduplication", "count", len(logs))
-		originalCount := len(logs)
-		logs = trimDuplicateLogInfo(logs)
-		logger.Info("finished deduplication",
-			"original", originalCount,
-			"final", len(logs),
-			"removed", originalCount-len(logs))
-
-		if trimJSON != "" {
-			if err := writeLogsToJSON(logs, trimJSON); err != nil {
-				return fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
-			}
-			logger.Info("wrote deduplicated logs", "file", trimJSON)
-		}
+	var err error
+	if logs, err = applyTrim(logs); err != nil {
+		return err
 	}
 
 	// Set output destination
@@ -605,22 +655,9 @@ func runAIAnalysis(logs []LogEntry) error {
 		}
 	}
 
-	// Apply trim if requested
-	if trim {
-		logger.Info("Starting deduplication", "count", len(logs))
-		originalCount := len(logs)
-		logs = trimDuplicateLogInfo(logs)
-		logger.Info("finished deduplication",
-			"original", originalCount,
-			"final", len(logs),
-			"removed", originalCount-len(logs))
-
-		if trimJSON != "" {
-			if err := writeLogsToJSON(logs, trimJSON); err != nil {
-				return fmt.Errorf("error writing deduplicated logs to JSON: %v", err)
-			}
-			logger.Info("wrote deduplicated logs", "file", trimJSON)
-		}
+	var applyTrimErr error
+	if logs, applyTrimErr = applyTrim(logs); applyTrimErr != nil {
+		return applyTrimErr
 	}
 
 	// After trimming, ask if user wants to send all remaining entries

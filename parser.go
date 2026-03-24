@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"runtime"
@@ -41,13 +42,17 @@ func (l *LogEntry) ExtrasToString() string {
 }
 
 // parseLogFile reads and parses a Mattermost log file, applying filters
-func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
+func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = file.Close() }()
+	return parseLogReader(file, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr)
+}
 
+// parseLogReader reads and parses log entries from an io.Reader, applying filters
+func parseLogReader(r io.Reader, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	// Parse time range filters if provided
 	var startTime, endTime time.Time
 	if startTimeStr != "" {
@@ -67,6 +72,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 
 	// Compile regex if provided
 	var regex *regexp.Regexp
+	var err error
 	if regexPattern != "" {
 		regex, err = regexp.Compile(regexPattern)
 		if err != nil {
@@ -75,7 +81,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 	}
 
 	var logs []LogEntry
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(r)
 
 	// Use a larger buffer for potentially long log lines
 	const maxCapacity = 512 * 1024 // 512KB
@@ -92,7 +98,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 		}
 
 		// Apply filters
-		if shouldIncludeEntry(entry, searchTerm, regex, levelFilter, userFilter, startTime, endTime) {
+		if shouldIncludeEntry(entry, searchTerm, regex, levelFilter, minLevelFilter, userFilter, startTime, endTime) {
 			logs = append(logs, entry)
 		}
 	}
@@ -838,10 +844,20 @@ func levenshteinDistance(s1, s2 string) int {
 }
 
 // shouldIncludeEntry checks if a log entry matches all the specified filters
-func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, userFilter string, startTime, endTime time.Time) bool {
+func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, minLevelFilter, userFilter string, startTime, endTime time.Time) bool {
 	// Apply level filter
 	if levelFilter != "" && !strings.EqualFold(entry.Level, levelFilter) {
 		return false
+	}
+
+	// Apply min-level filter. Unknown levels (e.g. "fatal", "panic") are treated
+	// as higher than "error" so they are always included.
+	if minLevelFilter != "" {
+		minRank := levelRanks[strings.ToLower(minLevelFilter)]
+		entryRank, ok := levelRanks[strings.ToLower(entry.Level)]
+		if ok && entryRank < minRank {
+			return false
+		}
 	}
 
 	// Apply user filter
