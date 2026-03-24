@@ -11,7 +11,13 @@ import (
 
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
+
+// isStdinTTY reports whether os.Stdin is an interactive terminal.
+func isStdinTTY() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
 
 var (
 	// Global flags
@@ -75,6 +81,25 @@ var fileCmd = &cobra.Command{
 		if len(args) == 1 {
 			// Single file mode
 			filePath := args[0]
+			if filePath == "-" {
+				if isStdinTTY() {
+					fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
+					os.Exit(2)
+				}
+				if aiAnalyze {
+					return fmt.Errorf("--ai-analyze requires interactive prompts and cannot be used with stdin input; provide a file path instead")
+				}
+				if interactive {
+					return fmt.Errorf("--interactive (TUI mode) cannot be used with stdin input; provide a file path instead")
+				}
+				logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
+				if err != nil {
+					return fmt.Errorf("error parsing stdin: %v", err)
+				}
+				logger.Debug("Processed file", "file", "<stdin>", "entries", len(logs))
+				return processLogs(logs)
+			}
+
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				return fmt.Errorf("file '%s' does not exist", filePath)
 			}
@@ -86,8 +111,24 @@ var fileCmd = &cobra.Command{
 
 			return processLogs(logs)
 		} else {
-			// Multiple files mode
+			// Multiple files mode — check for stdin before opening the progress bar
+			for _, filePath := range args {
+				if filePath == "-" {
+					if isStdinTTY() {
+						fmt.Fprintln(os.Stderr, "error: stdin is a TTY; pipe log data into lamp or provide a file path")
+						os.Exit(2)
+					}
+					if aiAnalyze {
+						return fmt.Errorf("--ai-analyze requires interactive prompts and cannot be used with stdin input; provide a file path instead")
+					}
+					if interactive {
+						return fmt.Errorf("--interactive (TUI mode) cannot be used with stdin input; provide a file path instead")
+					}
+				}
+			}
+
 			var allLogs []LogEntry
+			stdinConsumed := false
 
 			// Create progress bar for file processing
 			bar := progressbar.NewOptions(len(args),
@@ -107,6 +148,22 @@ var fileCmd = &cobra.Command{
 			for _, filePath := range args {
 				if err := bar.Add(1); err != nil {
 					logger.Warn("Error updating progress bar", "error", err)
+				}
+
+				if filePath == "-" {
+					if stdinConsumed {
+						logger.Warn("Duplicate \"-\" argument, stdin already consumed, skipping")
+						continue
+					}
+					logs, err := parseLogReader(os.Stdin, searchTerm, regexSearch, levelFilter, minLevelFilter, userFilter, startTime, endTime)
+					stdinConsumed = true
+					if err != nil {
+						logger.Warn("Error parsing stdin, skipping", "error", err)
+						continue
+					}
+					allLogs = append(allLogs, logs...)
+					logger.Debug("Processed file", "file", "<stdin>", "entries", len(logs))
+					continue
 				}
 
 				if _, err := os.Stat(filePath); os.IsNotExist(err) {

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"runtime"
@@ -47,7 +48,11 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, minLevelFilte
 		return nil, err
 	}
 	defer func() { _ = file.Close() }()
+	return parseLogReader(file, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr)
+}
 
+// parseLogReader reads and parses log entries from an io.Reader, applying filters
+func parseLogReader(r io.Reader, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	// Parse time range filters if provided
 	var startTime, endTime time.Time
 	if startTimeStr != "" {
@@ -67,6 +72,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, minLevelFilte
 
 	// Compile regex if provided
 	var regex *regexp.Regexp
+	var err error
 	if regexPattern != "" {
 		regex, err = regexp.Compile(regexPattern)
 		if err != nil {
@@ -75,7 +81,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, minLevelFilte
 	}
 
 	var logs []LogEntry
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(r)
 
 	// Use a larger buffer for potentially long log lines
 	const maxCapacity = 512 * 1024 // 512KB
