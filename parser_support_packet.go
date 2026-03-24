@@ -10,7 +10,7 @@ import (
 )
 
 // parseSupportPacket extracts and parses logs from a Mattermost support packet zip file
-func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
+func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	// Open the zip file
 	reader, err := zip.OpenReader(zipFilePath)
 	if err != nil {
@@ -44,7 +44,7 @@ func parseSupportPacket(zipFilePath, searchTerm, regexPattern, levelFilter, user
 			}
 
 			// Parse the extracted log file
-			logs, err := parseLogFile(extractedPath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr)
+			logs, err := parseLogFile(extractedPath, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr)
 			if err != nil {
 				logger.Warn("Failed to parse log file", "file", file.Name, "error", err)
 				continue

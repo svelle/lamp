@@ -41,7 +41,7 @@ func (l *LogEntry) ExtrasToString() string {
 }
 
 // parseLogFile reads and parses a Mattermost log file, applying filters
-func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
+func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, minLevelFilter, userFilter, startTimeStr, endTimeStr string) ([]LogEntry, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
@@ -92,7 +92,7 @@ func parseLogFile(filePath, searchTerm, regexPattern, levelFilter, userFilter, s
 		}
 
 		// Apply filters
-		if shouldIncludeEntry(entry, searchTerm, regex, levelFilter, userFilter, startTime, endTime) {
+		if shouldIncludeEntry(entry, searchTerm, regex, levelFilter, minLevelFilter, userFilter, startTime, endTime) {
 			logs = append(logs, entry)
 		}
 	}
@@ -838,10 +838,20 @@ func levenshteinDistance(s1, s2 string) int {
 }
 
 // shouldIncludeEntry checks if a log entry matches all the specified filters
-func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, userFilter string, startTime, endTime time.Time) bool {
+func shouldIncludeEntry(entry LogEntry, searchTerm string, regex *regexp.Regexp, levelFilter, minLevelFilter, userFilter string, startTime, endTime time.Time) bool {
 	// Apply level filter
 	if levelFilter != "" && !strings.EqualFold(entry.Level, levelFilter) {
 		return false
+	}
+
+	// Apply min-level filter. Unknown levels (e.g. "fatal", "panic") are treated
+	// as higher than "error" so they are always included.
+	if minLevelFilter != "" {
+		minRank := levelRanks[strings.ToLower(minLevelFilter)]
+		entryRank, ok := levelRanks[strings.ToLower(entry.Level)]
+		if ok && entryRank < minRank {
+			return false
+		}
 	}
 
 	// Apply user filter
