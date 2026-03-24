@@ -121,30 +121,30 @@ func formatLogsForAnalysis(logs []LogEntry) (string, int, bool) {
 	for i, log := range logs {
 		// Add count information for entries with duplicates
 		if log.DuplicateCount > 1 {
-			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s (repeated %d times)\n",
+			fmt.Fprintf(&logText, "%d. [%s] [%s] %s: %s (repeated %d times)\n",
 				i+1,
 				log.Timestamp.Format("2006-01-02 15:04:05"),
 				log.Level,
 				log.Source,
 				log.Message,
-				log.DuplicateCount))
+				log.DuplicateCount)
 			hasDuplicates = true
 			totalEntries += log.DuplicateCount
 		} else {
-			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s\n",
+			fmt.Fprintf(&logText, "%d. [%s] [%s] %s: %s\n",
 				i+1,
 				log.Timestamp.Format("2006-01-02 15:04:05"),
 				log.Level,
 				log.Source,
-				log.Message))
+				log.Message)
 			totalEntries += 1
 		}
 
 		if log.User != "" {
-			logText.WriteString(fmt.Sprintf("   User: %s\n", log.User))
+			fmt.Fprintf(&logText, "   User: %s\n", log.User)
 		}
 		if log.Source != "" {
-			logText.WriteString(fmt.Sprintf("   Source: %s\n", log.Source))
+			fmt.Fprintf(&logText, "   Source: %s\n", log.Source)
 		}
 		if len(log.Extras) > 0 {
 			logText.WriteString(fmt.Sprintf("   Extras: %s\n", log.ExtrasToString()))
