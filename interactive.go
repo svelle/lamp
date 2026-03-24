@@ -155,25 +155,25 @@ func updateLogList(list *tview.List, logs []LogEntry, filter string, detailsView
 func showLogDetails(log LogEntry, view *tview.TextView) {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("[yellow]Timestamp:[white] %s\n", log.Timestamp.Format(time.RFC3339)))
-	sb.WriteString(fmt.Sprintf("[yellow]Level:[white] [%s]%s[white]\n\n", getLevelColorName(log.Level), log.Level))
+	fmt.Fprintf(&sb, "[yellow]Timestamp:[white] %s\n", log.Timestamp.Format(time.RFC3339))
+	fmt.Fprintf(&sb, "[yellow]Level:[white] [%s]%s[white]\n\n", getLevelColorName(log.Level), log.Level)
 
 	if log.Source != "" {
-		sb.WriteString(fmt.Sprintf("[yellow]Source:[white] %s\n\n", log.Source))
+		fmt.Fprintf(&sb, "[yellow]Source:[white] %s\n\n", log.Source)
 	}
 
 	if log.User != "" {
-		sb.WriteString(fmt.Sprintf("[yellow]User:[white] %s\n", log.User))
+		fmt.Fprintf(&sb, "[yellow]User:[white] %s\n", log.User)
 	}
 
 	for key, value := range log.Extras {
-		sb.WriteString(fmt.Sprintf("[yellow]%s:[white] %s\n", key, value))
+		fmt.Fprintf(&sb, "[yellow]%s:[white] %s\n", key, value)
 	}
 
-	sb.WriteString(fmt.Sprintf("\n[yellow]Message:[white]\n%s\n\n", log.Message))
+	fmt.Fprintf(&sb, "\n[yellow]Message:[white]\n%s\n\n", log.Message)
 
 	if log.DuplicateCount > 1 {
-		sb.WriteString(fmt.Sprintf("[yellow]Occurrences:[white] %d\n\n", log.DuplicateCount))
+		fmt.Fprintf(&sb, "[yellow]Occurrences:[white] %d\n\n", log.DuplicateCount)
 	}
 
 	view.SetText(sb.String())

@@ -147,7 +147,7 @@ func formatLogsForAnalysis(logs []LogEntry) (string, int, bool) {
 			fmt.Fprintf(&logText, "   Source: %s\n", log.Source)
 		}
 		if len(log.Extras) > 0 {
-			logText.WriteString(fmt.Sprintf("   Extras: %s\n", log.ExtrasToString()))
+			fmt.Fprintf(&logText, "   Extras: %s\n", log.ExtrasToString())
 		}
 		logText.WriteString("\n")
 	}
