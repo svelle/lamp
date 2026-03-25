@@ -45,6 +45,8 @@ type LLMConfig struct {
 	MaxEntries     int
 	Problem        string
 	ThinkingBudget int
+	OllamaHost     string
+	OllamaTimeout  int
 }
 
 // AnalysisPrompt contains the prepared prompt data for LLM analysis
@@ -119,33 +121,33 @@ func formatLogsForAnalysis(logs []LogEntry) (string, int, bool) {
 	for i, log := range logs {
 		// Add count information for entries with duplicates
 		if log.DuplicateCount > 1 {
-			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s (repeated %d times)\n",
+			fmt.Fprintf(&logText, "%d. [%s] [%s] %s: %s (repeated %d times)\n",
 				i+1,
 				log.Timestamp.Format("2006-01-02 15:04:05"),
 				log.Level,
 				log.Source,
 				log.Message,
-				log.DuplicateCount))
+				log.DuplicateCount)
 			hasDuplicates = true
 			totalEntries += log.DuplicateCount
 		} else {
-			logText.WriteString(fmt.Sprintf("%d. [%s] [%s] %s: %s\n",
+			fmt.Fprintf(&logText, "%d. [%s] [%s] %s: %s\n",
 				i+1,
 				log.Timestamp.Format("2006-01-02 15:04:05"),
 				log.Level,
 				log.Source,
-				log.Message))
+				log.Message)
 			totalEntries += 1
 		}
 
 		if log.User != "" {
-			logText.WriteString(fmt.Sprintf("   User: %s\n", log.User))
+			fmt.Fprintf(&logText, "   User: %s\n", log.User)
 		}
 		if log.Source != "" {
-			logText.WriteString(fmt.Sprintf("   Source: %s\n", log.Source))
+			fmt.Fprintf(&logText, "   Source: %s\n", log.Source)
 		}
 		if len(log.Extras) > 0 {
-			logText.WriteString(fmt.Sprintf("   Extras: %s\n", log.ExtrasToString()))
+			fmt.Fprintf(&logText, "   Extras: %s\n", log.ExtrasToString())
 		}
 		logText.WriteString("\n")
 	}
@@ -818,7 +820,16 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 	}
 
 	// Create HTTP request using the configured Ollama host
-	apiURL := OllamaHost
+	ollamaHost := config.OllamaHost
+	if ollamaHost == "" {
+		ollamaHost = OllamaHost // fall back to package-level default
+	}
+	ollamaTimeout := config.OllamaTimeout
+	if ollamaTimeout == 0 {
+		ollamaTimeout = OllamaTimeout // fall back to package-level default
+	}
+
+	apiURL := ollamaHost
 	if !strings.HasSuffix(apiURL, "/") {
 		apiURL += "/"
 	}
@@ -834,11 +845,11 @@ func analyzeWithOllama(logs []LogEntry, config LLMConfig) error {
 
 	// Create HTTP client with the configured timeout
 	client := &http.Client{
-		Timeout: time.Duration(OllamaTimeout) * time.Second,
+		Timeout: time.Duration(ollamaTimeout) * time.Second,
 	}
 
 	// Send request
-	fmt.Printf("Sending request to local Ollama instance (timeout: %d seconds)...\n", OllamaTimeout)
+	fmt.Printf("Sending request to local Ollama instance (timeout: %d seconds)...\n", ollamaTimeout)
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("error sending request to Ollama: %v", err)
